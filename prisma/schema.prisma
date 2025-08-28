@@ -28,6 +28,11 @@ model User {
   categories         Category[]
   goals              Goal[]
   investments        Investment[]
+  accounts           Account[]
+  bills              Bill[]
+  activities         Activity[]
+  notifications      Notification[]
+  scheduledTransactions ScheduledTransaction[]
 }
 
 model Category {
@@ -44,6 +49,7 @@ model Category {
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   budgets      Budget[]
+  bills        Bill[]
 }
 
 model Transaction {
@@ -57,12 +63,16 @@ model Transaction {
   frequency   String?       // "daily", "weekly", "monthly", "yearly"
   categoryId  String?
   userId      String
+  fromAccountId String?
+  toAccountId   String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
   // Relationships
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   category    Category?     @relation(fields: [categoryId], references: [id])
+  fromAccount Account?      @relation("FromTransactions", fields: [fromAccountId], references: [id])
+  toAccount   Account?      @relation("ToTransactions", fields: [toAccountId], references: [id])
 }
 
 model Budget {
@@ -137,4 +147,131 @@ enum InvestmentType {
   BOND
   REAL_ESTATE
   OTHER
+}
+
+// New models for enhanced functionality
+
+model Account {
+  id                    String   @id @default(cuid())
+  name                  String
+  type                  AccountType
+  balance               Float    @default(0)
+  currency              String   @default("USD")
+  description           String?
+  isActive              Boolean  @default(true)
+  userId                String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relationships
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromTransactions      Transaction[] @relation("FromTransactions")
+  toTransactions        Transaction[] @relation("ToTransactions")
+}
+
+model Bill {
+  id          String   @id @default(cuid())
+  name        String
+  amount      Float
+  currency    String   @default("USD")
+  dueDate     DateTime
+  frequency   BillFrequency
+  categoryId  String?
+  userId      String
+  isPaid      Boolean  @default(false)
+  isRecurring Boolean  @default(true)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category? @relation(fields: [categoryId], references: [id])
+}
+
+model Activity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  description String
+  metadata    String?      // JSON string for additional data
+  userId      String
+  createdAt   DateTime     @default(now())
+
+  // Relationships
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  title       String
+  message     String
+  type        NotificationType
+  isRead      Boolean          @default(false)
+  actionUrl   String?
+  userId      String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relationships
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ScheduledTransaction {
+  id              String      @id @default(cuid())
+  amount          Float
+  currency        String      @default("USD")
+  description     String
+  fromAccountId   String
+  toAccountId     String
+  scheduledDate   DateTime
+  frequency       String?     // "once", "daily", "weekly", "monthly", "yearly"
+  isExecuted      Boolean     @default(false)
+  userId          String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relationships
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// New enums
+
+enum AccountType {
+  CASH
+  BANK
+  CREDIT_CARD
+  INVESTMENT
+  SAVINGS
+  OTHER
+}
+
+enum BillFrequency {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  WEEKLY
+  BIWEEKLY
+}
+
+enum ActivityType {
+  TRANSACTION_CREATED
+  TRANSACTION_UPDATED
+  TRANSACTION_DELETED
+  ACCOUNT_CREATED
+  ACCOUNT_UPDATED
+  BILL_CREATED
+  BILL_PAID
+  GOAL_CREATED
+  GOAL_UPDATED
+  BUDGET_CREATED
+  BUDGET_UPDATED
+}
+
+enum NotificationType {
+  BILL_DUE
+  SCHEDULED_TRANSACTION
+  GOAL_DEADLINE
+  BUDGET_EXCEEDED
+  LOW_BALANCE
+  GENERAL
 }
