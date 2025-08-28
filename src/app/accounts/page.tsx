@@ -6,10 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import { motion } from "framer-motion"
 import {
   Plus,
@@ -38,6 +40,10 @@ interface Account {
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [showBalances, setShowBalances] = useState(true)
   const [newAccount, setNewAccount] = useState({
     name: "",
@@ -98,14 +104,10 @@ export default function AccountsPage() {
     switch (type) {
       case "CASH":
         return <Banknote className="h-6 w-6" />
-      case "BANK":
-        return <Wallet className="h-6 w-6" />
-      case "CREDIT_CARD":
-        return <CreditCard className="h-6 w-6" />
       case "SAVINGS":
         return <PiggyBank className="h-6 w-6" />
-      case "INVESTMENT":
-        return <TrendingUp className="h-6 w-6" />
+      case "CREDIT_CARD":
+        return <CreditCard className="h-6 w-6" />
       default:
         return <Wallet className="h-6 w-6" />
     }
@@ -114,22 +116,17 @@ export default function AccountsPage() {
   const getAccountTypeColor = (type: string) => {
     switch (type) {
       case "CASH":
-        return "bg-green-100 text-green-800 border-green-200"
-      case "BANK":
-        return "bg-blue-100 text-blue-800 border-blue-200"
-      case "CREDIT_CARD":
-        return "bg-red-100 text-red-800 border-red-200"
+        return "bg-green-100 text-green-700 border-green-200"
       case "SAVINGS":
-        return "bg-purple-100 text-purple-800 border-purple-200"
-      case "INVESTMENT":
-        return "bg-orange-100 text-orange-800 border-orange-200"
+        return "bg-blue-100 text-blue-700 border-blue-200"
+      case "CREDIT_CARD":
+        return "bg-red-100 text-red-700 border-red-200"
       default:
-        return "bg-gray-100 text-gray-800 border-gray-200"
+        return "bg-purple-100 text-purple-700 border-purple-200"
     }
   }
 
-  const handleAddAccount = async () => {
-    // In a real app, this would make an API call
+  const addAccount = () => {
     const account: Account = {
       id: Date.now().toString(),
       ...newAccount,
@@ -144,6 +141,62 @@ export default function AccountsPage() {
       description: ""
     })
     setShowAddForm(false)
+  }
+
+  const handleEditAccount = (account: Account) => {
+    setSelectedAccount(account)
+    setNewAccount({
+      name: account.name,
+      type: account.type,
+      balance: account.balance,
+      currency: account.currency,
+      description: account.description || ""
+    })
+    setShowEditForm(true)
+  }
+
+  const handleUpdateAccount = () => {
+    if (!selectedAccount) return
+    
+    const updatedAccounts = accounts.map(account =>
+      account.id === selectedAccount.id
+        ? { ...account, ...newAccount }
+        : account
+    )
+    setAccounts(updatedAccounts)
+    setSelectedAccount(null)
+    setNewAccount({
+      name: "",
+      type: "BANK",
+      balance: 0,
+      currency: "USD",
+      description: ""
+    })
+    setShowEditForm(false)
+  }
+
+  const handleDeleteAccount = (account: Account) => {
+    setSelectedAccount(account)
+    setShowDeleteModal(true)
+  }
+
+  const confirmDeleteAccount = async () => {
+    if (!selectedAccount) return
+    
+    setIsDeleting(true)
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      const updatedAccounts = accounts.filter(account => account.id !== selectedAccount.id)
+      setAccounts(updatedAccounts)
+      setSelectedAccount(null)
+      setShowDeleteModal(false)
+    } catch (error) {
+      console.error("Failed to delete account:", error)
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   const totalBalance = accounts
@@ -200,9 +253,11 @@ export default function AccountsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-700">
-                {showBalances ? `$${totalBalance.toLocaleString()}` : "•••••"}
+                ${totalBalance.toLocaleString()}
               </div>
-              <p className="text-xs text-green-600">+5.2% from last month</p>
+              <p className="text-xs text-green-600">
+                +5.2% from last month
+              </p>
             </CardContent>
           </Card>
 
@@ -213,22 +268,26 @@ export default function AccountsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-700">
-                {showBalances ? `$${totalDebt.toLocaleString()}` : "•••••"}
+                ${totalDebt.toLocaleString()}
               </div>
-              <p className="text-xs text-red-600">-2.1% from last month</p>
+              <p className="text-xs text-red-600">
+                -2.1% from last month
+              </p>
             </CardContent>
           </Card>
 
           <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-indigo-50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
-              <Wallet className="h-4 w-4 text-blue-600" />
+              <PiggyBank className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-700">
-                {showBalances ? `$${netWorth.toLocaleString()}` : "•••••"}
+                ${netWorth.toLocaleString()}
               </div>
-              <p className="text-xs text-blue-600">+8.7% from last month</p>
+              <p className="text-xs text-blue-600">
+                +8.7% from last month
+              </p>
             </CardContent>
           </Card>
         </motion.div>
@@ -260,9 +319,26 @@ export default function AccountsPage() {
                       </Badge>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleEditAccount(account)}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleDeleteAccount(account)}
+                        className="text-red-600 focus:text-red-600"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -278,18 +354,10 @@ export default function AccountsPage() {
                       </span>
                     </div>
                     {account.description && (
-                      <p className="text-sm text-muted-foreground">{account.description}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {account.description}
+                      </p>
                     )}
-                    <div className="flex space-x-2 pt-2">
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Edit className="mr-1 h-3 w-3" />
-                        Edit
-                      </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Trash2 className="mr-1 h-3 w-3" />
-                        Delete
-                      </Button>
-                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -299,93 +367,178 @@ export default function AccountsPage() {
 
         {/* Add Account Dialog */}
         <Dialog open={showAddForm} onOpenChange={setShowAddForm}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Add New Account</DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
+            <div className="space-y-4">
+              <div className="space-y-2">
                 <Label htmlFor="name">Account Name</Label>
                 <Input
                   id="name"
+                  placeholder="e.g., Main Checking"
                   value={newAccount.name}
-                  onChange={(e) => setNewAccount({...newAccount, name: e.target.value})}
-                  placeholder="e.g., Main Checking Account"
+                  onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
                 />
               </div>
-              
-              <div className="grid gap-2">
+              <div className="space-y-2">
                 <Label htmlFor="type">Account Type</Label>
                 <Select
                   value={newAccount.type}
-                  onValueChange={(value) => setNewAccount({...newAccount, type: value})}
+                  onValueChange={(value) => setNewAccount({ ...newAccount, type: value })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select account type" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="BANK">Bank Account</SelectItem>
                     <SelectItem value="SAVINGS">Savings Account</SelectItem>
                     <SelectItem value="CASH">Cash</SelectItem>
                     <SelectItem value="CREDIT_CARD">Credit Card</SelectItem>
-                    <SelectItem value="INVESTMENT">Investment Account</SelectItem>
-                    <SelectItem value="OTHER">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="balance">Initial Balance</Label>
+              <div className="space-y-2">
+                <Label htmlFor="balance">Current Balance</Label>
                 <Input
                   id="balance"
                   type="number"
                   step="0.01"
-                  value={newAccount.balance}
-                  onChange={(e) => setNewAccount({...newAccount, balance: parseFloat(e.target.value) || 0})}
                   placeholder="0.00"
+                  value={newAccount.balance}
+                  onChange={(e) => setNewAccount({ ...newAccount, balance: parseFloat(e.target.value) || 0 })}
                 />
               </div>
-
-              <div className="grid gap-2">
+              <div className="space-y-2">
                 <Label htmlFor="currency">Currency</Label>
                 <Select
                   value={newAccount.currency}
-                  onValueChange={(value) => setNewAccount({...newAccount, currency: value})}
+                  onValueChange={(value) => setNewAccount({ ...newAccount, currency: value })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select currency" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="USD">USD - US Dollar</SelectItem>
-                    <SelectItem value="EUR">EUR - Euro</SelectItem>
-                    <SelectItem value="GBP">GBP - British Pound</SelectItem>
-                    <SelectItem value="JPY">JPY - Japanese Yen</SelectItem>
+                    <SelectItem value="USD">USD ($)</SelectItem>
+                    <SelectItem value="EUR">EUR (€)</SelectItem>
+                    <SelectItem value="GBP">GBP (£)</SelectItem>
+                    <SelectItem value="JPY">JPY (¥)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="grid gap-2">
+              <div className="space-y-2">
                 <Label htmlFor="description">Description (Optional)</Label>
                 <Textarea
                   id="description"
+                  placeholder="Account description..."
                   value={newAccount.description}
-                  onChange={(e) => setNewAccount({...newAccount, description: e.target.value})}
-                  placeholder="Add a description for this account..."
-                  rows={3}
+                  onChange={(e) => setNewAccount({ ...newAccount, description: e.target.value })}
                 />
               </div>
-            </div>
-            
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowAddForm(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddAccount} disabled={!newAccount.name}>
-                Add Account
-              </Button>
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => setShowAddForm(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={addAccount}>
+                  Add Account
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Account Dialog */}
+        <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Account</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Account Name</Label>
+                <Input
+                  id="edit-name"
+                  placeholder="e.g., Main Checking"
+                  value={newAccount.name}
+                  onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-type">Account Type</Label>
+                <Select
+                  value={newAccount.type}
+                  onValueChange={(value) => setNewAccount({ ...newAccount, type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BANK">Bank Account</SelectItem>
+                    <SelectItem value="SAVINGS">Savings Account</SelectItem>
+                    <SelectItem value="CASH">Cash</SelectItem>
+                    <SelectItem value="CREDIT_CARD">Credit Card</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-balance">Current Balance</Label>
+                <Input
+                  id="edit-balance"
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={newAccount.balance}
+                  onChange={(e) => setNewAccount({ ...newAccount, balance: parseFloat(e.target.value) || 0 })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-currency">Currency</Label>
+                <Select
+                  value={newAccount.currency}
+                  onValueChange={(value) => setNewAccount({ ...newAccount, currency: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD ($)</SelectItem>
+                    <SelectItem value="EUR">EUR (€)</SelectItem>
+                    <SelectItem value="GBP">GBP (£)</SelectItem>
+                    <SelectItem value="JPY">JPY (¥)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description (Optional)</Label>
+                <Textarea
+                  id="edit-description"
+                  placeholder="Account description..."
+                  value={newAccount.description}
+                  onChange={(e) => setNewAccount({ ...newAccount, description: e.target.value })}
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => setShowEditForm(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUpdateAccount}>
+                  Update Account
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={confirmDeleteAccount}
+          title="Delete Account"
+          description={`Are you sure you want to delete the account "${selectedAccount?.name}"? This action cannot be undone and will remove all associated transactions.`}
+          itemName={selectedAccount?.name}
+          isLoading={isDeleting}
+        />
       </div>
     </DashboardLayout>
   )

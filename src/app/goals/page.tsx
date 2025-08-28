@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import { motion } from "framer-motion"
 import {
   Plus,
@@ -48,6 +50,12 @@ interface Goal {
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [showAddFundsForm, setShowAddFundsForm] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [addFundsAmount, setAddFundsAmount] = useState(0)
   const [newGoal, setNewGoal] = useState({
     name: "",
     targetAmount: 0,
@@ -151,6 +159,95 @@ export default function GoalsPage() {
       category: "Other"
     })
     setShowAddForm(false)
+  }
+
+  const handleEditGoal = (goal: Goal) => {
+    setSelectedGoal(goal)
+    setNewGoal({
+      name: goal.name,
+      targetAmount: goal.targetAmount,
+      currentAmount: goal.currentAmount,
+      currency: goal.currency,
+      deadline: goal.deadline,
+      description: goal.description,
+      category: goal.category
+    })
+    setShowEditForm(true)
+  }
+
+  const handleUpdateGoal = async () => {
+    if (!selectedGoal) return
+    
+    const updatedGoal: Goal = {
+      ...selectedGoal,
+      ...newGoal,
+      progress: newGoal.targetAmount > 0 ? (newGoal.currentAmount / newGoal.targetAmount) * 100 : 0,
+      isCompleted: newGoal.currentAmount >= newGoal.targetAmount
+    }
+    
+    setGoals(goals.map(goal => 
+      goal.id === selectedGoal.id ? updatedGoal : goal
+    ))
+    
+    setSelectedGoal(null)
+    setNewGoal({
+      name: "",
+      targetAmount: 0,
+      currentAmount: 0,
+      currency: "USD",
+      deadline: undefined,
+      description: "",
+      category: "Other"
+    })
+    setShowEditForm(false)
+  }
+
+  const handleDeleteGoal = (goal: Goal) => {
+    setSelectedGoal(goal)
+    setShowDeleteModal(true)
+  }
+
+  const confirmDeleteGoal = async () => {
+    if (!selectedGoal) return
+    
+    setIsDeleting(true)
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      setGoals(goals.filter(goal => goal.id !== selectedGoal.id))
+      setSelectedGoal(null)
+      setShowDeleteModal(false)
+    } catch (error) {
+      console.error("Failed to delete goal:", error)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleAddFunds = (goal: Goal) => {
+    setSelectedGoal(goal)
+    setAddFundsAmount(0)
+    setShowAddFundsForm(true)
+  }
+
+  const confirmAddFunds = async () => {
+    if (!selectedGoal || addFundsAmount <= 0) return
+    
+    const updatedGoal: Goal = {
+      ...selectedGoal,
+      currentAmount: selectedGoal.currentAmount + addFundsAmount,
+      progress: selectedGoal.targetAmount > 0 ? ((selectedGoal.currentAmount + addFundsAmount) / selectedGoal.targetAmount) * 100 : 0,
+      isCompleted: (selectedGoal.currentAmount + addFundsAmount) >= selectedGoal.targetAmount
+    }
+    
+    setGoals(goals.map(goal => 
+      goal.id === selectedGoal.id ? updatedGoal : goal
+    ))
+    
+    setSelectedGoal(null)
+    setAddFundsAmount(0)
+    setShowAddFundsForm(false)
   }
 
   const getCategoryIcon = (category: string) => {
@@ -408,14 +505,41 @@ export default function GoalsPage() {
                     )}
 
                     <div className="flex space-x-2 pt-2">
-                      <Button variant="outline" size="sm" className="flex-1">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => handleEditGoal(goal)}
+                      >
                         <Edit className="mr-1 h-3 w-3" />
                         Edit
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => handleAddFunds(goal)}
+                        disabled={goal.isCompleted}
+                      >
                         <DollarSign className="mr-1 h-3 w-3" />
                         Add Funds
                       </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            onClick={() => handleDeleteGoal(goal)}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </CardContent>
                 </Card>
@@ -530,6 +654,171 @@ export default function GoalsPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Goal Dialog */}
+        <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Edit Goal</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-goal-name">Goal Name</Label>
+                <Input
+                  id="edit-goal-name"
+                  value={newGoal.name}
+                  onChange={(e) => setNewGoal({...newGoal, name: e.target.value})}
+                  placeholder="e.g., Emergency Fund"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-target-amount">Target Amount</Label>
+                  <Input
+                    id="edit-target-amount"
+                    type="number"
+                    step="0.01"
+                    value={newGoal.targetAmount}
+                    onChange={(e) => setNewGoal({...newGoal, targetAmount: parseFloat(e.target.value) || 0})}
+                    placeholder="10000.00"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-current-amount">Current Amount</Label>
+                  <Input
+                    id="edit-current-amount"
+                    type="number"
+                    step="0.01"
+                    value={newGoal.currentAmount}
+                    onChange={(e) => setNewGoal({...newGoal, currentAmount: parseFloat(e.target.value) || 0})}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="edit-category">Category</Label>
+                <select
+                  id="edit-category"
+                  value={newGoal.category}
+                  onChange={(e) => setNewGoal({...newGoal, category: e.target.value})}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="Emergency">Emergency Fund</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Transportation">Transportation</option>
+                  <option value="Housing">Housing</option>
+                  <option value="Technology">Technology</option>
+                  <option value="Education">Education</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Deadline (Optional)</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="justify-start text-left font-normal">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {newGoal.deadline ? format(newGoal.deadline, "PPP") : "Select deadline"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={newGoal.deadline}
+                      onSelect={(date) => setNewGoal({...newGoal, deadline: date})}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  value={newGoal.description}
+                  onChange={(e) => setNewGoal({...newGoal, description: e.target.value})}
+                  placeholder="Describe your goal and why it's important to you..."
+                  rows={3}
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowEditForm(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleUpdateGoal} 
+                disabled={!newGoal.name || newGoal.targetAmount <= 0}
+              >
+                Update Goal
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Funds Dialog */}
+        <Dialog open={showAddFundsForm} onOpenChange={setShowAddFundsForm}>
+          <DialogContent className="sm:max-w-[400px]">
+            <DialogHeader>
+              <DialogTitle>Add Funds to "{selectedGoal?.name}"</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="funds-amount">Amount to Add</Label>
+                <Input
+                  id="funds-amount"
+                  type="number"
+                  step="0.01"
+                  value={addFundsAmount}
+                  onChange={(e) => setAddFundsAmount(parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                />
+              </div>
+              {selectedGoal && (
+                <div className="p-3 bg-blue-50 rounded-lg">
+                  <div className="text-sm text-blue-900">
+                    Current: ${selectedGoal.currentAmount.toLocaleString()} / ${selectedGoal.targetAmount.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-blue-700">
+                    After adding: ${(selectedGoal.currentAmount + addFundsAmount).toLocaleString()}
+                  </div>
+                  <div className="text-sm text-blue-600">
+                    Remaining: ${Math.max(0, selectedGoal.targetAmount - selectedGoal.currentAmount - addFundsAmount).toLocaleString()}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowAddFundsForm(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={confirmAddFunds} 
+                disabled={addFundsAmount <= 0}
+              >
+                Add Funds
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={confirmDeleteGoal}
+          title="Delete Goal"
+          description={`Are you sure you want to delete "${selectedGoal?.name}"? This action cannot be undone and will permanently remove this goal and all its progress.`}
+          itemName={selectedGoal?.name}
+          isLoading={isDeleting}
+        />
       </div>
     </DashboardLayout>
   )

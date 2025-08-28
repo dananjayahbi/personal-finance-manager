@@ -6,7 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { motion } from "framer-motion"
+import TransactionForm from "@/components/transaction-form"
 import {
   LineChart,
   Line,
@@ -76,6 +78,18 @@ const mockData = {
 
 export default function DashboardContent({ className }: DashboardContentProps) {
   const { user } = useAuth()
+  const [showTransactionForm, setShowTransactionForm] = useState(false)
+  const [categories, setCategories] = useState([
+    { id: "1", name: "Food & Dining", type: "EXPENSE", icon: "🍔" },
+    { id: "2", name: "Transportation", type: "EXPENSE", icon: "🚗" },
+    { id: "3", name: "Shopping", type: "EXPENSE", icon: "🛍️" },
+    { id: "4", name: "Entertainment", type: "EXPENSE", icon: "🎬" },
+    { id: "5", name: "Bills & Utilities", type: "EXPENSE", icon: "💡" },
+    { id: "6", name: "Healthcare", type: "EXPENSE", icon: "🏥" },
+    { id: "7", name: "Salary", type: "INCOME", icon: "💼" },
+    { id: "8", name: "Freelance", type: "INCOME", icon: "💻" },
+    { id: "9", name: "Investment", type: "INCOME", icon: "📈" }
+  ])
   const [financialOverview, setFinancialOverview] = useState({
     totalBalance: 15420.50,
     monthlyIncome: 5500,
@@ -85,6 +99,13 @@ export default function DashboardContent({ className }: DashboardContentProps) {
     activeGoals: 3,
     upcomingBills: 5
   })
+
+  const handleTransactionSubmit = async (transaction: any) => {
+    // Here you would typically save to database
+    console.log("Transaction submitted:", transaction)
+    setShowTransactionForm(false)
+    // You could refresh financial data here
+  }
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -119,7 +140,10 @@ export default function DashboardContent({ className }: DashboardContentProps) {
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
+          <Button 
+            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+            onClick={() => setShowTransactionForm(true)}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Add Transaction
           </Button>
@@ -443,6 +467,20 @@ export default function DashboardContent({ className }: DashboardContentProps) {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Add Transaction Dialog */}
+      <Dialog open={showTransactionForm} onOpenChange={setShowTransactionForm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New Transaction</DialogTitle>
+          </DialogHeader>
+          <TransactionForm 
+            categories={categories}
+            onSubmit={handleTransactionSubmit}
+            onCancel={() => setShowTransactionForm(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

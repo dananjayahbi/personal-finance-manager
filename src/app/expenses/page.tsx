@@ -22,6 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import { motion } from "framer-motion"
 import {
   Search,
@@ -56,6 +57,9 @@ export default function ExpensesPage() {
   const [sortBy, setSortBy] = useState<"date" | "amount" | "category">("date")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [selectedCategory, setSelectedCategory] = useState("all")
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     fetchExpenses()
@@ -204,6 +208,35 @@ export default function ExpensesPage() {
     } else {
       setSortBy(column)
       setSortOrder("desc")
+    }
+  }
+
+  const handleEditExpense = (expense: Expense) => {
+    // For now, just log - could open an edit dialog
+    console.log("Edit expense:", expense)
+    // TODO: Implement edit expense functionality
+  }
+
+  const handleDeleteExpense = (expense: Expense) => {
+    setSelectedExpense(expense)
+    setShowDeleteModal(true)
+  }
+
+  const confirmDeleteExpense = async () => {
+    if (!selectedExpense) return
+    
+    setIsDeleting(true)
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      setExpenses(expenses.filter(expense => expense.id !== selectedExpense.id))
+      setSelectedExpense(null)
+      setShowDeleteModal(false)
+    } catch (error) {
+      console.error("Failed to delete expense:", error)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -447,11 +480,14 @@ export default function ExpensesPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEditExpense(expense)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-red-600">
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteExpense(expense)}
+                                className="text-red-600 focus:text-red-600"
+                              >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete
                               </DropdownMenuItem>
@@ -472,6 +508,17 @@ export default function ExpensesPage() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={confirmDeleteExpense}
+          title="Delete Expense"
+          description={`Are you sure you want to delete the expense "${selectedExpense?.description}"? This action cannot be undone.`}
+          itemName={selectedExpense?.description}
+          isLoading={isDeleting}
+        />
       </div>
     </DashboardLayout>
   )

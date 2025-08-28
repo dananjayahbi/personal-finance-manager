@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -13,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import { motion } from "framer-motion"
 import {
   Plus,
@@ -48,6 +50,10 @@ interface Bill {
 export default function BillsPage() {
   const [bills, setBills] = useState<Bill[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [selectedBill, setSelectedBill] = useState<Bill | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>()
   const [newBill, setNewBill] = useState({
     name: "",
@@ -175,6 +181,71 @@ export default function BillsPage() {
     setBills(bills.map(bill => 
       bill.id === billId ? { ...bill, isPaid: !bill.isPaid } : bill
     ))
+  }
+
+  const handleEditBill = (bill: Bill) => {
+    setSelectedBill(bill)
+    setNewBill({
+      name: bill.name,
+      amount: bill.amount,
+      currency: bill.currency,
+      dueDate: bill.dueDate,
+      frequency: bill.frequency,
+      category: bill.category,
+      description: bill.description || "",
+      isRecurring: bill.isRecurring
+    })
+    setShowEditForm(true)
+  }
+
+  const handleUpdateBill = async () => {
+    if (!selectedBill) return
+    
+    const updatedBill: Bill = {
+      ...selectedBill,
+      ...newBill,
+      daysUntilDue: Math.ceil((newBill.dueDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    }
+    
+    setBills(bills.map(bill => 
+      bill.id === selectedBill.id ? updatedBill : bill
+    ))
+    
+    setSelectedBill(null)
+    setNewBill({
+      name: "",
+      amount: 0,
+      currency: "USD",
+      dueDate: new Date(),
+      frequency: "MONTHLY",
+      category: "",
+      description: "",
+      isRecurring: true
+    })
+    setShowEditForm(false)
+  }
+
+  const handleDeleteBill = (bill: Bill) => {
+    setSelectedBill(bill)
+    setShowDeleteModal(true)
+  }
+
+  const confirmDeleteBill = async () => {
+    if (!selectedBill) return
+    
+    setIsDeleting(true)
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      setBills(bills.filter(bill => bill.id !== selectedBill.id))
+      setSelectedBill(null)
+      setShowDeleteModal(false)
+    } catch (error) {
+      console.error("Failed to delete bill:", error)
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   const getBillStatus = (bill: Bill) => {
@@ -369,9 +440,26 @@ export default function BillsPage() {
                           </span>
                         </Badge>
 
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEditBill(bill)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteBill(bill)}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
 
@@ -538,6 +626,154 @@ export default function BillsPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Bill Dialog */}
+        <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Edit Bill</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-bill-name">Bill Name</Label>
+                <Input
+                  id="edit-bill-name"
+                  value={newBill.name}
+                  onChange={(e) => setNewBill({...newBill, name: e.target.value})}
+                  placeholder="e.g., Electric Bill"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-amount">Amount</Label>
+                  <Input
+                    id="edit-amount"
+                    type="number"
+                    step="0.01"
+                    value={newBill.amount}
+                    onChange={(e) => setNewBill({...newBill, amount: parseFloat(e.target.value) || 0})}
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-currency">Currency</Label>
+                  <Select
+                    value={newBill.currency}
+                    onValueChange={(value) => setNewBill({...newBill, currency: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                      <SelectItem value="GBP">GBP</SelectItem>
+                      <SelectItem value="LKR">LKR</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Due Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {format(newBill.dueDate, "PPP")}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={newBill.dueDate}
+                      onSelect={(date) => date && setNewBill({...newBill, dueDate: date})}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-frequency">Frequency</Label>
+                  <Select
+                    value={newBill.frequency}
+                    onValueChange={(value) => setNewBill({...newBill, frequency: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="WEEKLY">Weekly</SelectItem>
+                      <SelectItem value="BIWEEKLY">Bi-weekly</SelectItem>
+                      <SelectItem value="MONTHLY">Monthly</SelectItem>
+                      <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+                      <SelectItem value="YEARLY">Yearly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-category">Category</Label>
+                  <Input
+                    id="edit-category"
+                    value={newBill.category}
+                    onChange={(e) => setNewBill({...newBill, category: e.target.value})}
+                    placeholder="e.g., Utilities"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="edit-description">Description (Optional)</Label>
+                <Textarea
+                  id="edit-description"
+                  value={newBill.description}
+                  onChange={(e) => setNewBill({...newBill, description: e.target.value})}
+                  placeholder="Add notes about this bill..."
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="edit-recurring"
+                  checked={newBill.isRecurring}
+                  onCheckedChange={(checked) => 
+                    setNewBill({...newBill, isRecurring: checked as boolean})
+                  }
+                />
+                <Label htmlFor="edit-recurring">This is a recurring bill</Label>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowEditForm(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateBill} disabled={!newBill.name || newBill.amount <= 0}>
+                Update Bill
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={confirmDeleteBill}
+          title="Delete Bill"
+          description={`Are you sure you want to delete "${selectedBill?.name}"? This action cannot be undone and will remove all payment history.`}
+          itemName={selectedBill?.name}
+          isLoading={isDeleting}
+        />
       </div>
     </DashboardLayout>
   )
