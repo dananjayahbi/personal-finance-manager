@@ -7,6 +7,26 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import {
   Table,
   TableBody,
@@ -16,6 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { motion } from "framer-motion"
+import { formatCurrency } from "@/lib/currency"
 import {
   Activity as ActivityIcon,
   TrendingUp,
@@ -36,7 +57,9 @@ import {
   CheckCircle,
   AlertTriangle,
   Eye,
-  Settings
+  Settings,
+  Trash2,
+  Check
 } from "lucide-react"
 
 interface ActivityItem {
@@ -58,6 +81,9 @@ export default function ActivityPage() {
   const [filter, setFilter] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedActivities, setSelectedActivities] = useState<Set<string>>(new Set())
+  const [selectedActivity, setSelectedActivity] = useState<ActivityItem | null>(null)
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
 
   useEffect(() => {
     fetchActivities()
@@ -169,15 +195,121 @@ export default function ActivityPage() {
   const formatAmount = (amount?: number) => {
     if (!amount) return null
     const isPositive = amount > 0
-    const formatted = Math.abs(amount).toLocaleString('en-US', {
+    const formatted = Math.abs(amount).toLocaleString('en-LK', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'LKR'
     })
     return (
       <span className={isPositive ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
         {isPositive ? '+' : '-'}{formatted}
       </span>
     )
+  }
+
+  const exportActivities = () => {
+    const csvHeaders = [
+      'Activity ID',
+      'Type',
+      'Title',
+      'Description',
+      'Amount',
+      'Account',
+      'Category',
+      'Status',
+      'Date',
+      'Time'
+    ]
+
+    const csvData = filteredActivities.map(activity => [
+      activity.id,
+      activity.type,
+      activity.title,
+      activity.description,
+      activity.amount ? activity.amount.toString() : '',
+      activity.account || '',
+      activity.category || '',
+      activity.status,
+      activity.timestamp.toLocaleDateString(),
+      activity.timestamp.toLocaleTimeString()
+    ])
+
+    const csvContent = [
+      csvHeaders.join(','),
+      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `activity-export-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
+
+  const handleSelectActivity = (activityId: string, checked: boolean) => {
+    const newSelected = new Set(selectedActivities)
+    if (checked) {
+      newSelected.add(activityId)
+    } else {
+      newSelected.delete(activityId)
+    }
+    setSelectedActivities(newSelected)
+  }
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedActivities(new Set(filteredActivities.map(a => a.id)))
+    } else {
+      setSelectedActivities(new Set())
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedActivities.size === 0) return
+
+    try {
+      const response = await fetch('/api/activities/bulk-delete', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ activityIds: Array.from(selectedActivities) }),
+      })
+
+      if (response.ok) {
+        await fetchActivities()
+        setSelectedActivities(new Set())
+      } else {
+        console.error('Failed to delete activities')
+      }
+    } catch (error) {
+      console.error('Error deleting activities:', error)
+    }
+  }
+
+  const handleClearAllHistory = async () => {
+    try {
+      const response = await fetch('/api/activities', {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        await fetchActivities()
+        setSelectedActivities(new Set())
+      } else {
+        console.error('Failed to clear all activities')
+      }
+    } catch (error) {
+      console.error('Error clearing activities:', error)
+    }
+  }
+
+  const handleViewDetails = (activity: ActivityItem) => {
+    setSelectedActivity(activity)
+    setIsViewDialogOpen(true)
   }
 
   const getTimeAgo = (date: Date) => {
@@ -222,10 +354,54 @@ export default function ActivityPage() {
               <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={exportActivities}>
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
+            {selectedActivities.size > 0 && (
+              <>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete Selected ({selectedActivities.size})
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Selected Activities</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete {selectedActivities.size} selected activities? This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleBulkDelete}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Clear All History
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Clear All Activity History</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete all activity history? This action cannot be undone and will remove all activity records.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleClearAllHistory}>Clear All</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
           </div>
         </motion.div>
 
@@ -330,6 +506,12 @@ export default function ActivityPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedActivities.size === filteredActivities.length && filteredActivities.length > 0}
+                        onCheckedChange={handleSelectAll}
+                      />
+                    </TableHead>
                     <TableHead className="w-12"></TableHead>
                     <TableHead>Activity</TableHead>
                     <TableHead>Account</TableHead>
@@ -346,8 +528,14 @@ export default function ActivityPage() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.4 + index * 0.02 }}
-                      className="hover:bg-gray-50 transition-colors cursor-pointer"
+                      className="hover:bg-gray-50 transition-colors"
                     >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedActivities.has(activity.id)}
+                          onCheckedChange={(checked) => handleSelectActivity(activity.id, checked as boolean)}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center">
                           {getActivityIcon(activity.type, activity.amount)}
@@ -382,7 +570,11 @@ export default function ActivityPage() {
                         {getTimeAgo(activity.timestamp)}
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="sm">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleViewDetails(activity)}
+                        >
                           <Eye className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -421,6 +613,101 @@ export default function ActivityPage() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* View Details Modal */}
+        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                {selectedActivity && getActivityIcon(selectedActivity.type, selectedActivity.amount)}
+                <span>Activity Details</span>
+              </DialogTitle>
+              <DialogDescription>
+                Complete information about this activity
+              </DialogDescription>
+            </DialogHeader>
+            
+            {selectedActivity && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Activity ID</h4>
+                    <p className="text-sm font-mono">{selectedActivity.id}</p>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Type</h4>
+                    <p className="text-sm capitalize">{selectedActivity.type.replace('_', ' ')}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-sm text-muted-foreground mb-1">Title</h4>
+                  <p className="font-medium">{selectedActivity.title}</p>
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-sm text-muted-foreground mb-1">Description</h4>
+                  <p className="text-sm">{selectedActivity.description}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Account</h4>
+                    <p className="text-sm">{selectedActivity.account || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Category</h4>
+                    <p className="text-sm">{selectedActivity.category || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {selectedActivity.amount && (
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Amount</h4>
+                    <p className="text-lg font-semibold">
+                      {formatCurrency(selectedActivity.amount, 'LKR')}
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Status</h4>
+                    <Badge variant="outline" className={getStatusColor(selectedActivity.status)}>
+                      <div className="flex items-center space-x-1">
+                        {getStatusIcon(selectedActivity.status)}
+                        <span className="capitalize">{selectedActivity.status}</span>
+                      </div>
+                    </Badge>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Date & Time</h4>
+                    <p className="text-sm">
+                      {selectedActivity.timestamp.toLocaleDateString()} at {selectedActivity.timestamp.toLocaleTimeString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {getTimeAgo(selectedActivity.timestamp)}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedActivity.metadata && Object.keys(selectedActivity.metadata).length > 0 && (
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-2">Additional Information</h4>
+                    <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                      {Object.entries(selectedActivity.metadata).map(([key, value]) => (
+                        <div key={key} className="flex justify-between text-sm">
+                          <span className="capitalize text-muted-foreground">{key.replace('_', ' ')}:</span>
+                          <span className="font-medium">{String(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   )

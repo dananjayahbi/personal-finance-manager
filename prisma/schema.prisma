@@ -33,6 +33,33 @@ model User {
   activities         Activity[]
   notifications      Notification[]
   scheduledTransactions ScheduledTransaction[]
+  settings           UserSettings?
+}
+
+model UserSettings {
+  id                 String   @id @default(cuid())
+  firstName          String?
+  lastName           String?
+  phone              String?
+  currency           String   @default("LKR")
+  language           String   @default("en")
+  timezone           String   @default("Asia/Colombo")
+  dateFormat         String   @default("DD/MM/YYYY")
+  theme              String   @default("light")
+  twoFactorEnabled   Boolean  @default(false)
+  emailNotifications Boolean  @default(true)
+  pushNotifications  Boolean  @default(true)
+  smsNotifications   Boolean  @default(false)
+  billReminders      Boolean  @default(true)
+  goalReminders      Boolean  @default(true)
+  lowBalanceAlerts   Boolean  @default(true)
+  budgetAlerts       Boolean  @default(true)
+  userId             String   @unique
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relationships
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Category {

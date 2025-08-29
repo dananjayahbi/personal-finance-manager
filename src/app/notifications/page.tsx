@@ -5,6 +5,26 @@ import DashboardLayout from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { motion } from "framer-motion"
 import {
   Bell,
@@ -20,7 +40,10 @@ import {
   Trash2,
   Mail,
   Filter,
-  Settings
+  Settings,
+  Eye,
+  MailOpen,
+  MailCheck
 } from "lucide-react"
 
 interface Notification {
@@ -37,6 +60,10 @@ interface Notification {
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [filter, setFilter] = useState<"all" | "unread" | "high">("all")
+  const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set())
+  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false)
 
   useEffect(() => {
     fetchNotifications()
@@ -172,15 +199,147 @@ export default function NotificationsPage() {
     }
   }
 
-  const deleteNotification = (notificationId: string) => {
-    setNotifications(notifications.filter(notification => notification.id !== notificationId))
+  const deleteNotification = async (notificationId: string) => {
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        setNotifications(notifications.filter(notification => notification.id !== notificationId))
+        setSelectedNotifications(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(notificationId)
+          return newSet
+        })
+      } else {
+        const data = await response.json()
+        console.error('Failed to delete notification:', data.error)
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error)
+    }
   }
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(notification => ({
-      ...notification,
-      isRead: true
-    })))
+  const markAllAsRead = async () => {
+    try {
+      const unreadNotifications = notifications.filter(n => !n.isRead)
+      
+      for (const notification of unreadNotifications) {
+        await fetch(`/api/notifications/${notification.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            isRead: true
+          })
+        })
+      }
+
+      setNotifications(notifications.map(notification => ({
+        ...notification,
+        isRead: true
+      })))
+    } catch (error) {
+      console.error('Error marking all as read:', error)
+    }
+  }
+
+  const handleSelectNotification = (notificationId: string, checked: boolean) => {
+    const newSelected = new Set(selectedNotifications)
+    if (checked) {
+      newSelected.add(notificationId)
+    } else {
+      newSelected.delete(notificationId)
+    }
+    setSelectedNotifications(newSelected)
+  }
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedNotifications(new Set(filteredNotifications.map(n => n.id)))
+    } else {
+      setSelectedNotifications(new Set())
+    }
+  }
+
+  const handleBulkMarkAsRead = async () => {
+    if (selectedNotifications.size === 0) return
+
+    try {
+      for (const notificationId of Array.from(selectedNotifications)) {
+        await fetch(`/api/notifications/${notificationId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            isRead: true
+          })
+        })
+      }
+
+      setNotifications(notifications.map(notification => 
+        selectedNotifications.has(notification.id)
+          ? { ...notification, isRead: true }
+          : notification
+      ))
+      setSelectedNotifications(new Set())
+    } catch (error) {
+      console.error('Error bulk marking as read:', error)
+    }
+  }
+
+  const handleBulkMarkAsUnread = async () => {
+    if (selectedNotifications.size === 0) return
+
+    try {
+      for (const notificationId of Array.from(selectedNotifications)) {
+        await fetch(`/api/notifications/${notificationId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            isRead: false
+          })
+        })
+      }
+
+      setNotifications(notifications.map(notification => 
+        selectedNotifications.has(notification.id)
+          ? { ...notification, isRead: false }
+          : notification
+      ))
+      setSelectedNotifications(new Set())
+    } catch (error) {
+      console.error('Error bulk marking as unread:', error)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedNotifications.size === 0) return
+
+    try {
+      for (const notificationId of Array.from(selectedNotifications)) {
+        await fetch(`/api/notifications/${notificationId}`, {
+          method: 'DELETE'
+        })
+      }
+
+      setNotifications(notifications.filter(notification => 
+        !selectedNotifications.has(notification.id)
+      ))
+      setSelectedNotifications(new Set())
+    } catch (error) {
+      console.error('Error bulk deleting notifications:', error)
+    }
+  }
+
+  const handleViewDetails = (notification: Notification) => {
+    setSelectedNotification(notification)
+    setIsViewDialogOpen(true)
   }
 
   const filteredNotifications = notifications.filter(notification => {
@@ -226,7 +385,10 @@ export default function NotificationsPage() {
             </p>
           </div>
           <div className="flex space-x-2">
-            <Button variant="outline">
+            <Button 
+              variant="outline"
+              onClick={() => setIsSettingsDialogOpen(true)}
+            >
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </Button>
@@ -318,6 +480,63 @@ export default function NotificationsPage() {
           </Button>
         </motion.div>
 
+        {/* Bulk Operations */}
+        {selectedNotifications.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg"
+          >
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                checked={selectedNotifications.size === filteredNotifications.length && filteredNotifications.length > 0}
+                onCheckedChange={handleSelectAll}
+              />
+              <span className="text-sm font-medium">
+                {selectedNotifications.size} of {filteredNotifications.length} selected
+              </span>
+            </div>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkMarkAsRead}
+              >
+                <MailCheck className="mr-2 h-4 w-4" />
+                Mark as Read
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkMarkAsUnread}
+              >
+                <MailOpen className="mr-2 h-4 w-4" />
+                Mark as Unread
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Selected
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Selected Notifications</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete {selectedNotifications.size} selected notifications? This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleBulkDelete}>Delete</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </motion.div>
+        )}
+
         {/* Notifications List */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -333,18 +552,24 @@ export default function NotificationsPage() {
               transition={{ delay: 0.4 + index * 0.05 }}
             >
               <Card 
-                className={`border-0 shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer ${
+                className={`border-0 shadow-lg hover:shadow-xl transition-all duration-200 ${
                   getNotificationBgColor(notification.type, notification.isRead)
                 }`}
-                onClick={() => !notification.isRead && markAsRead(notification.id)}
               >
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start space-x-4 flex-1">
+                      <Checkbox
+                        checked={selectedNotifications.has(notification.id)}
+                        onCheckedChange={(checked) => handleSelectNotification(notification.id, checked as boolean)}
+                      />
                       <div className="flex-shrink-0">
                         {getNotificationIcon(notification.type)}
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div 
+                        className="flex-1 min-w-0 cursor-pointer"
+                        onClick={() => !notification.isRead && markAsRead(notification.id)}
+                      >
                         <div className="flex items-center space-x-2 mb-2">
                           <h3 className={`font-semibold ${!notification.isRead ? 'text-gray-900' : 'text-gray-600'}`}>
                             {notification.title}
@@ -363,11 +588,18 @@ export default function NotificationsPage() {
                           <span className="text-xs text-gray-500">
                             {getTimeAgo(notification.createdAt)}
                           </span>
-                          {notification.actionUrl && (
-                            <Button variant="link" size="sm" className="h-auto p-0 text-blue-600">
-                              View Details →
-                            </Button>
-                          )}
+                          <Button 
+                            variant="link" 
+                            size="sm" 
+                            className="h-auto p-0 text-blue-600"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleViewDetails(notification)
+                            }}
+                          >
+                            <Eye className="mr-1 h-3 w-3" />
+                            View Details
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -381,7 +613,7 @@ export default function NotificationsPage() {
                             e.stopPropagation()
                             markAsUnread(notification.id)
                           }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="opacity-60 hover:opacity-100 transition-opacity"
                         >
                           <Mail className="h-4 w-4" />
                         </Button>
@@ -397,17 +629,32 @@ export default function NotificationsPage() {
                           <Check className="h-4 w-4" />
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          deleteNotification(notification.id)
-                        }}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Notification</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete this notification? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteNotification(notification.id)}>
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
                 </CardContent>
@@ -444,6 +691,143 @@ export default function NotificationsPage() {
             )}
           </motion.div>
         )}
+
+        {/* View Details Modal */}
+        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                {selectedNotification && getNotificationIcon(selectedNotification.type)}
+                <span>Notification Details</span>
+              </DialogTitle>
+              <DialogDescription>
+                Complete information about this notification
+              </DialogDescription>
+            </DialogHeader>
+            
+            {selectedNotification && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Notification ID</h4>
+                    <p className="text-sm font-mono">{selectedNotification.id}</p>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Type</h4>
+                    <p className="text-sm capitalize">{selectedNotification.type.replace('_', ' ')}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-sm text-muted-foreground mb-1">Title</h4>
+                  <p className="font-medium">{selectedNotification.title}</p>
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-sm text-muted-foreground mb-1">Message</h4>
+                  <p className="text-sm">{selectedNotification.message}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Priority</h4>
+                    <Badge variant="outline" className={getPriorityColor(selectedNotification.priority)}>
+                      {selectedNotification.priority}
+                    </Badge>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Status</h4>
+                    <Badge variant="outline" className={selectedNotification.isRead ? "bg-green-100 text-green-800 border-green-200" : "bg-blue-100 text-blue-800 border-blue-200"}>
+                      {selectedNotification.isRead ? "Read" : "Unread"}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-sm text-muted-foreground mb-1">Created</h4>
+                  <p className="text-sm">
+                    {selectedNotification.createdAt.toLocaleDateString()} at {selectedNotification.createdAt.toLocaleTimeString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {getTimeAgo(selectedNotification.createdAt)}
+                  </p>
+                </div>
+
+                {selectedNotification.actionUrl && (
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Action URL</h4>
+                    <p className="text-sm text-blue-600 break-all">{selectedNotification.actionUrl}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Settings Modal */}
+        <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                <Settings className="h-5 w-5" />
+                <span>Notification Settings</span>
+              </DialogTitle>
+              <DialogDescription>
+                Configure your notification preferences
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium">Email Notifications</h4>
+                    <p className="text-sm text-muted-foreground">Receive notifications via email</p>
+                  </div>
+                  <Checkbox defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium">Push Notifications</h4>
+                    <p className="text-sm text-muted-foreground">Receive browser push notifications</p>
+                  </div>
+                  <Checkbox defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium">Bill Due Reminders</h4>
+                    <p className="text-sm text-muted-foreground">Get reminded about upcoming bill payments</p>
+                  </div>
+                  <Checkbox defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium">Budget Alerts</h4>
+                    <p className="text-sm text-muted-foreground">Get alerted when budgets are exceeded</p>
+                  </div>
+                  <Checkbox defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium">Goal Reminders</h4>
+                    <p className="text-sm text-muted-foreground">Receive reminders about financial goals</p>
+                  </div>
+                  <Checkbox defaultChecked />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t">
+                <Button className="w-full">
+                  Save Settings
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   )

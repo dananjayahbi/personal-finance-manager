@@ -160,6 +160,91 @@ export default function BalancesPage() {
     return history
   }
 
+  const exportBalanceData = () => {
+    const csvHeaders = [
+      'Account ID',
+      'Account Name',
+      'Account Type',
+      'Balance',
+      'Currency',
+      'Percentage of Total',
+      'Change Amount',
+      'Change Percentage'
+    ]
+
+    const csvData = accountBalances.map(account => [
+      account.id,
+      account.name,
+      account.type,
+      account.balance.toString(),
+      account.currency,
+      account.percentage.toFixed(2) + '%',
+      account.change.toString(),
+      account.changePercent.toFixed(2) + '%'
+    ])
+
+    // Add summary row
+    const totalBalance = accountBalances.reduce((sum, account) => sum + account.balance, 0)
+    const totalAssets = accountBalances.filter(a => a.balance > 0).reduce((sum, account) => sum + account.balance, 0)
+    const totalLiabilities = Math.abs(accountBalances.filter(a => a.balance < 0).reduce((sum, account) => sum + account.balance, 0))
+
+    csvData.push([
+      '',
+      'SUMMARY',
+      '',
+      '',
+      '',
+      '',
+      '',
+      ''
+    ])
+    csvData.push([
+      '',
+      'Total Balance',
+      '',
+      totalBalance.toString(),
+      'LKR',
+      '',
+      '',
+      ''
+    ])
+    csvData.push([
+      '',
+      'Total Assets',
+      '',
+      totalAssets.toString(),
+      'LKR',
+      '',
+      '',
+      ''
+    ])
+    csvData.push([
+      '',
+      'Total Liabilities',
+      '',
+      totalLiabilities.toString(),
+      'LKR',
+      '',
+      '',
+      ''
+    ])
+
+    const csvContent = [
+      csvHeaders.join(','),
+      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `balance-report-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
+
   const totalAssets = accountBalances
     .filter(account => account.balance > 0)
     .reduce((sum, account) => sum + account.balance, 0)
@@ -239,7 +324,7 @@ export default function BalancesPage() {
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={exportBalanceData}>
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>

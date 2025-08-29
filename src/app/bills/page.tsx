@@ -58,7 +58,7 @@ export default function BillsPage() {
   const [newBill, setNewBill] = useState({
     name: "",
     amount: 0,
-    currency: "USD",
+    currency: "LKR",
     dueDate: new Date(),
     frequency: "MONTHLY",
     category: "",
@@ -130,7 +130,7 @@ export default function BillsPage() {
         setNewBill({
           name: "",
           amount: 0,
-          currency: "USD",
+          currency: "LKR",
           dueDate: new Date(),
           frequency: "MONTHLY",
           category: "",
@@ -194,28 +194,49 @@ export default function BillsPage() {
   const handleUpdateBill = async () => {
     if (!selectedBill) return
     
-    const updatedBill: Bill = {
-      ...selectedBill,
-      ...newBill,
-      daysUntilDue: Math.ceil((newBill.dueDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    try {
+      const billData = {
+        name: newBill.name,
+        amount: newBill.amount,
+        currency: newBill.currency,
+        dueDate: newBill.dueDate.toISOString(),
+        frequency: newBill.frequency,
+        description: newBill.description,
+        isRecurring: newBill.isRecurring
+      }
+
+      const response = await fetch(`/api/bills/${selectedBill.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(billData)
+      })
+
+      if (response.ok) {
+        // Refresh bills list
+        fetchBills()
+        setSelectedBill(null)
+        setNewBill({
+          name: "",
+          amount: 0,
+          currency: "LKR",
+          dueDate: new Date(),
+          frequency: "MONTHLY",
+          category: "",
+          description: "",
+          isRecurring: true
+        })
+        setShowEditForm(false)
+      } else {
+        const errorData = await response.json()
+        console.error('Failed to update bill:', errorData.error)
+        alert('Failed to update bill. Please try again.')
+      }
+    } catch (error) {
+      console.error("Error updating bill:", error)
+      alert('Failed to update bill. Please try again.')
     }
-    
-    setBills(bills.map(bill => 
-      bill.id === selectedBill.id ? updatedBill : bill
-    ))
-    
-    setSelectedBill(null)
-    setNewBill({
-      name: "",
-      amount: 0,
-      currency: "USD",
-      dueDate: new Date(),
-      frequency: "MONTHLY",
-      category: "",
-      description: "",
-      isRecurring: true
-    })
-    setShowEditForm(false)
   }
 
   const handleDeleteBill = (bill: Bill) => {
@@ -228,14 +249,23 @@ export default function BillsPage() {
     
     setIsDeleting(true)
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      setBills(bills.filter(bill => bill.id !== selectedBill.id))
-      setSelectedBill(null)
-      setShowDeleteModal(false)
+      const response = await fetch(`/api/bills/${selectedBill.id}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        // Refresh bills list
+        fetchBills()
+        setSelectedBill(null)
+        setShowDeleteModal(false)
+      } else {
+        const errorData = await response.json()
+        console.error('Failed to delete bill:', errorData.error)
+        alert('Failed to delete bill. Please try again.')
+      }
     } catch (error) {
       console.error("Failed to delete bill:", error)
+      alert('Failed to delete bill. Please try again.')
     } finally {
       setIsDeleting(false)
     }

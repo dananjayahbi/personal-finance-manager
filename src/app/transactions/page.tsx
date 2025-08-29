@@ -119,10 +119,10 @@ export default function TransactionsPage() {
           fromAccount: tx.fromAccount?.name || "",
           toAccount: tx.toAccount?.name || "",
           scheduledDate: new Date(tx.date),
-          executedDate: new Date(tx.date),
+          executedDate: tx.recurring ? undefined : new Date(tx.date), // Only set executed date for non-recurring
           frequency: tx.frequency || "once",
           isScheduled: tx.recurring,
-          isExecuted: true,
+          isExecuted: !tx.recurring, // Recurring transactions start as not executed
           category: tx.category?.name || ""
         }))
         setTransactions(convertedTransactions)
@@ -185,6 +185,46 @@ export default function TransactionsPage() {
         ? { ...transaction, isExecuted: true, executedDate: new Date() }
         : transaction
     ))
+  }
+
+  const reverseExecution = (transactionId: string) => {
+    setTransactions(transactions.map(transaction => 
+      transaction.id === transactionId 
+        ? { ...transaction, isExecuted: false, executedDate: undefined }
+        : transaction
+    ))
+  }
+
+  const exportTransactions = () => {
+    const csvContent = [
+      // CSV Header
+      'Date,Type,Description,Amount,Currency,Status,Category,From Account,To Account',
+      // CSV Data
+      ...transactions.map(transaction => {
+        const date = transaction.executedDate || transaction.scheduledDate
+        return [
+          date ? format(date, 'yyyy-MM-dd') : '',
+          transaction.type,
+          `"${transaction.description}"`,
+          transaction.amount,
+          transaction.currency,
+          transaction.isExecuted ? 'Executed' : 'Scheduled',
+          `"${transaction.category || ''}"`,
+          `"${transaction.fromAccount || ''}"`,
+          `"${transaction.toAccount || ''}"`
+        ].join(',')
+      })
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `transactions_${format(new Date(), 'yyyy-MM-dd')}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   const getTransactionIcon = (type: string) => {
@@ -314,7 +354,7 @@ export default function TransactionsPage() {
             </p>
           </div>
           <div className="flex space-x-2">
-            <Button variant="outline">
+            <Button variant="outline" onClick={exportTransactions}>
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
@@ -489,6 +529,21 @@ export default function TransactionsPage() {
                               disabled={transaction.isExecuted}
                             >
                               Execute Now
+                            </Button>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                        
+                        {transaction.isExecuted && (
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => reverseExecution(transaction.id)}
+                            >
+                              Undo Execution
                             </Button>
                             <Button variant="ghost" size="sm">
                               <MoreHorizontal className="h-4 w-4" />

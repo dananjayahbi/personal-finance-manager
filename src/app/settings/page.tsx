@@ -60,14 +60,14 @@ interface UserSettings {
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<UserSettings>({
-    firstName: "John",
-    lastName: "Doe",
+    firstName: "",
+    lastName: "",
     email: "john.doe@example.com",
-    phone: "+1 (555) 123-4567",
-    currency: "USD",
+    phone: "",
+    currency: "LKR",
     language: "en",
-    timezone: "America/New_York",
-    dateFormat: "MM/DD/YYYY",
+    timezone: "Asia/Colombo",
+    dateFormat: "DD/MM/YYYY",
     theme: "light",
     twoFactorEnabled: false,
     emailNotifications: true,
@@ -82,7 +82,32 @@ export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
+  useEffect(() => {
+    fetchSettings()
+  }, [])
+
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('/api/settings')
+      const data = await response.json()
+      
+      if (response.ok) {
+        setSettings(prevSettings => ({
+          ...prevSettings,
+          ...data.settings
+        }))
+      } else {
+        console.error('Failed to fetch settings:', data.error)
+        toast.error('Failed to load settings')
+      }
+    } catch (error) {
+      console.error('Error fetching settings:', error)
+      toast.error('Failed to load settings')
+    }
+  }
+
   const currencies = [
+    { value: "LKR", label: "Sri Lankan Rupee (LKR)" },
     { value: "USD", label: "US Dollar ($)" },
     { value: "EUR", label: "Euro (€)" },
     { value: "GBP", label: "British Pound (£)" },
@@ -101,6 +126,7 @@ export default function SettingsPage() {
   ]
 
   const timezones = [
+    { value: "Asia/Colombo", label: "Colombo (IST)" },
     { value: "America/New_York", label: "Eastern Time (ET)" },
     { value: "America/Chicago", label: "Central Time (CT)" },
     { value: "America/Denver", label: "Mountain Time (MT)" },
@@ -112,8 +138,8 @@ export default function SettingsPage() {
   ]
 
   const dateFormats = [
-    { value: "MM/DD/YYYY", label: "MM/DD/YYYY (12/31/2025)" },
     { value: "DD/MM/YYYY", label: "DD/MM/YYYY (31/12/2025)" },
+    { value: "MM/DD/YYYY", label: "MM/DD/YYYY (12/31/2025)" },
     { value: "YYYY-MM-DD", label: "YYYY-MM-DD (2025-12-31)" },
     { value: "MMM DD, YYYY", label: "MMM DD, YYYY (Dec 31, 2025)" }
   ]
@@ -128,10 +154,24 @@ export default function SettingsPage() {
   const saveSettings = async () => {
     setIsLoading(true)
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      toast.success("Settings saved successfully!")
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(settings),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success("Settings saved successfully!")
+      } else {
+        console.error('Failed to save settings:', data.error)
+        toast.error("Failed to save settings. Please try again.")
+      }
     } catch (error) {
+      console.error('Error saving settings:', error)
       toast.error("Failed to save settings. Please try again.")
     } finally {
       setIsLoading(false)
@@ -148,27 +188,33 @@ export default function SettingsPage() {
     }
   }
 
-  const resetSettings = () => {
-    setSettings({
-      firstName: "John",
-      lastName: "Doe",
-      email: "john.doe@example.com",
-      phone: "+1 (555) 123-4567",
-      currency: "USD",
-      language: "en",
-      timezone: "America/New_York",
-      dateFormat: "MM/DD/YYYY",
-      theme: "light",
-      twoFactorEnabled: false,
-      emailNotifications: true,
-      pushNotifications: true,
-      smsNotifications: false,
-      billReminders: true,
-      goalReminders: true,
-      lowBalanceAlerts: true,
-      budgetAlerts: true
-    })
-    toast.info("Settings reset to default values")
+  const resetSettings = async () => {
+    try {
+      const defaultSettings: UserSettings = {
+        firstName: "",
+        lastName: "",
+        email: "john.doe@example.com",
+        phone: "",
+        currency: "LKR",
+        language: "en",
+        timezone: "Asia/Colombo",
+        dateFormat: "DD/MM/YYYY",
+        theme: "light" as const,
+        twoFactorEnabled: false,
+        emailNotifications: true,
+        pushNotifications: true,
+        smsNotifications: false,
+        billReminders: true,
+        goalReminders: true,
+        lowBalanceAlerts: true,
+        budgetAlerts: true
+      }
+      
+      setSettings(defaultSettings)
+      toast.info("Settings reset to default values")
+    } catch (error) {
+      toast.error("Failed to reset settings")
+    }
   }
 
   return (

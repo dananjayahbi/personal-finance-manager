@@ -161,28 +161,46 @@ export default function GoalsPage() {
   const handleUpdateGoal = async () => {
     if (!selectedGoal) return
     
-    const updatedGoal: Goal = {
-      ...selectedGoal,
-      ...newGoal,
-      progress: newGoal.targetAmount > 0 ? (newGoal.currentAmount / newGoal.targetAmount) * 100 : 0,
-      isCompleted: newGoal.currentAmount >= newGoal.targetAmount
+    try {
+      const goalData = {
+        name: newGoal.name,
+        targetAmount: newGoal.targetAmount,
+        currentAmount: newGoal.currentAmount,
+        currency: newGoal.currency,
+        deadline: newGoal.deadline ? newGoal.deadline.toISOString() : null
+      }
+
+      const response = await fetch(`/api/goals/${selectedGoal.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(goalData)
+      })
+
+      if (response.ok) {
+        // Refresh goals list
+        fetchGoals()
+        setSelectedGoal(null)
+        setNewGoal({
+          name: "",
+          targetAmount: 0,
+          currentAmount: 0,
+          currency: "LKR",
+          deadline: undefined,
+          description: "",
+          category: "Other"
+        })
+        setShowEditForm(false)
+      } else {
+        const errorData = await response.json()
+        console.error('Failed to update goal:', errorData.error)
+        alert('Failed to update goal. Please try again.')
+      }
+    } catch (error) {
+      console.error("Error updating goal:", error)
+      alert('Failed to update goal. Please try again.')
     }
-    
-    setGoals(goals.map(goal => 
-      goal.id === selectedGoal.id ? updatedGoal : goal
-    ))
-    
-    setSelectedGoal(null)
-    setNewGoal({
-      name: "",
-      targetAmount: 0,
-      currentAmount: 0,
-      currency: "USD",
-      deadline: undefined,
-      description: "",
-      category: "Other"
-    })
-    setShowEditForm(false)
   }
 
   const handleDeleteGoal = (goal: Goal) => {
@@ -195,14 +213,23 @@ export default function GoalsPage() {
     
     setIsDeleting(true)
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      setGoals(goals.filter(goal => goal.id !== selectedGoal.id))
-      setSelectedGoal(null)
-      setShowDeleteModal(false)
+      const response = await fetch(`/api/goals/${selectedGoal.id}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        // Refresh goals list
+        fetchGoals()
+        setSelectedGoal(null)
+        setShowDeleteModal(false)
+      } else {
+        const errorData = await response.json()
+        console.error('Failed to delete goal:', errorData.error)
+        alert('Failed to delete goal. Please try again.')
+      }
     } catch (error) {
       console.error("Failed to delete goal:", error)
+      alert('Failed to delete goal. Please try again.')
     } finally {
       setIsDeleting(false)
     }
@@ -217,20 +244,36 @@ export default function GoalsPage() {
   const confirmAddFunds = async () => {
     if (!selectedGoal || addFundsAmount <= 0) return
     
-    const updatedGoal: Goal = {
-      ...selectedGoal,
-      currentAmount: selectedGoal.currentAmount + addFundsAmount,
-      progress: selectedGoal.targetAmount > 0 ? ((selectedGoal.currentAmount + addFundsAmount) / selectedGoal.targetAmount) * 100 : 0,
-      isCompleted: (selectedGoal.currentAmount + addFundsAmount) >= selectedGoal.targetAmount
+    try {
+      const newCurrentAmount = selectedGoal.currentAmount + addFundsAmount
+      
+      const goalData = {
+        currentAmount: newCurrentAmount
+      }
+
+      const response = await fetch(`/api/goals/${selectedGoal.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(goalData)
+      })
+
+      if (response.ok) {
+        // Refresh goals list
+        fetchGoals()
+        setSelectedGoal(null)
+        setAddFundsAmount(0)
+        setShowAddFundsForm(false)
+      } else {
+        const errorData = await response.json()
+        console.error('Failed to add funds:', errorData.error)
+        alert('Failed to add funds. Please try again.')
+      }
+    } catch (error) {
+      console.error("Error adding funds:", error)
+      alert('Failed to add funds. Please try again.')
     }
-    
-    setGoals(goals.map(goal => 
-      goal.id === selectedGoal.id ? updatedGoal : goal
-    ))
-    
-    setSelectedGoal(null)
-    setAddFundsAmount(0)
-    setShowAddFundsForm(false)
   }
 
   const getCategoryIcon = (category: string) => {

@@ -6,6 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Table,
   TableBody,
@@ -49,6 +53,7 @@ interface Expense {
   account: string
   recurring: boolean
   tags: string[]
+  notes?: string
 }
 
 export default function ExpensesPage() {
@@ -58,8 +63,17 @@ export default function ExpensesPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [newExpense, setNewExpense] = useState({
+    description: "",
+    amount: "",
+    category: "",
+    account: "",
+    date: new Date().toISOString().split('T')[0],
+    notes: ""
+  })
 
   useEffect(() => {
     fetchExpenses()
@@ -182,6 +196,80 @@ export default function ExpensesPage() {
     }
   }
 
+  const handleAddExpense = async () => {
+    if (!newExpense.description || !newExpense.amount || !newExpense.category) {
+      alert("Please fill in all required fields")
+      return
+    }
+
+    try {
+      const expenseData = {
+        description: newExpense.description,
+        amount: parseFloat(newExpense.amount),
+        type: "EXPENSE",
+        currency: "LKR",
+        date: new Date(newExpense.date).toISOString(),
+        categoryId: "expense-category-1", // Default category for now
+        recurring: false
+      }
+
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(expenseData)
+      })
+
+      if (response.ok) {
+        // Refresh expenses list
+        fetchExpenses()
+        setNewExpense({
+          description: "",
+          amount: "",
+          category: "",
+          account: "",
+          date: new Date().toISOString().split('T')[0],
+          notes: ""
+        })
+        setShowAddForm(false)
+      } else {
+        const errorData = await response.json()
+        console.error('Failed to add expense:', errorData.error)
+        alert('Failed to add expense. Please try again.')
+      }
+    } catch (error) {
+      console.error("Error adding expense:", error)
+      alert('Failed to add expense. Please try again.')
+    }
+  }
+
+  const exportExpenses = () => {
+    const csvContent = [
+      // CSV Header
+      'Date,Description,Category,Amount,Account,Notes',
+      // CSV Data
+      ...filteredAndSortedExpenses.map(expense => [
+        expense.date,
+        `"${expense.description}"`,
+        `"${expense.category}"`,
+        expense.amount,
+        `"${expense.account}"`,
+        `"${expense.notes || ''}"`
+      ].join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `expenses_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const getCategoryColor = (category: string) => {
     const colors: { [key: string]: string } = {
       "Food & Dining": "bg-orange-100 text-orange-800 border-orange-200",
@@ -210,11 +298,11 @@ export default function ExpensesPage() {
             </p>
           </div>
           <div className="flex space-x-2">
-            <Button variant="outline">
+            <Button variant="outline" onClick={exportExpenses}>
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={() => setShowAddForm(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Add Expense
             </Button>
@@ -450,6 +538,106 @@ export default function ExpensesPage() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Add Expense Dialog */}
+        <Dialog open={showAddForm} onOpenChange={setShowAddForm}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Add New Expense</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="description">Description *</Label>
+                <Input
+                  id="description"
+                  placeholder="e.g., Grocery Shopping"
+                  value={newExpense.description}
+                  onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="amount">Amount (Rs.) *</Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={newExpense.amount}
+                    onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category *</Label>
+                  <Select value={newExpense.category} onValueChange={(value) => setNewExpense({ ...newExpense, category: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Food & Dining">Food & Dining</SelectItem>
+                      <SelectItem value="Transportation">Transportation</SelectItem>
+                      <SelectItem value="Shopping">Shopping</SelectItem>
+                      <SelectItem value="Utilities">Utilities</SelectItem>
+                      <SelectItem value="Healthcare">Healthcare</SelectItem>
+                      <SelectItem value="Entertainment">Entertainment</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="account">Account</Label>
+                  <Select value={newExpense.account} onValueChange={(value) => setNewExpense({ ...newExpense, account: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Main Checking">Main Checking</SelectItem>
+                      <SelectItem value="Savings Account">Savings Account</SelectItem>
+                      <SelectItem value="Cash Wallet">Cash Wallet</SelectItem>
+                      <SelectItem value="Credit Card">Credit Card</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="date">Date</Label>
+                  <Input
+                    id="date"
+                    type="date"
+                    value={newExpense.date}
+                    onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  placeholder="Additional notes (optional)"
+                  value={newExpense.notes}
+                  onChange={(e) => setNewExpense({ ...newExpense, notes: e.target.value })}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => setShowAddForm(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleAddExpense}>
+                  Add Expense
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Delete Confirmation Modal */}
         <DeleteConfirmationModal
