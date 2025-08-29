@@ -1,5 +1,6 @@
 "use client"
 
+import { formatCurrency } from "@/lib/currency"
 import { useState, useEffect } from "react"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -60,9 +61,12 @@ export default function TransactionsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
   const [transactionType, setTransactionType] = useState<"TRANSFER" | "INCOME" | "EXPENSE">("TRANSFER")
+  const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showClearAllDialog, setShowClearAllDialog] = useState(false)
   const [newTransaction, setNewTransaction] = useState({
     amount: 0,
-    currency: "USD",
+    currency: "LKR",
     description: "",
     fromAccount: "",
     toAccount: "",
@@ -77,110 +81,102 @@ export default function TransactionsPage() {
   }, [])
 
   const fetchAccounts = async () => {
-    // Mock accounts data
-    const mockAccounts: Account[] = [
-      { id: "1", name: "Main Checking", type: "BANK", balance: 5420.50 },
-      { id: "2", name: "Savings Account", type: "SAVINGS", balance: 12500.00 },
-      { id: "3", name: "Cash Wallet", type: "CASH", balance: 280.00 },
-      { id: "4", name: "Credit Card", type: "CREDIT_CARD", balance: -1250.75 }
-    ]
-    setAccounts(mockAccounts)
+    try {
+      const response = await fetch('/api/accounts')
+      const data = await response.json()
+      
+      if (response.ok) {
+        setAccounts(data.accounts)
+      } else {
+        console.error('Failed to fetch accounts:', data.error)
+        // Fall back to mock data
+        const mockAccounts: Account[] = [
+          { id: "1", name: "Main Checking", type: "BANK", balance: 5420.50 },
+          { id: "2", name: "Savings Account", type: "SAVINGS", balance: 12500.00 },
+          { id: "3", name: "Cash Wallet", type: "CASH", balance: 280.00 },
+          { id: "4", name: "Credit Card", type: "CREDIT_CARD", balance: -1250.75 }
+        ]
+        setAccounts(mockAccounts)
+      }
+    } catch (error) {
+      console.error('Error fetching accounts:', error)
+    }
   }
 
   const fetchTransactions = async () => {
-    // Mock data for demonstration
-    const mockTransactions: Transaction[] = [
-      {
-        id: "1",
-        type: "TRANSFER",
-        amount: 500.00,
-        currency: "USD",
-        description: "Monthly savings transfer",
-        fromAccount: "Main Checking",
-        toAccount: "Savings Account",
-        scheduledDate: new Date(2025, 8, 30),
-        executedDate: new Date(2025, 8, 30),
-        frequency: "monthly",
-        isScheduled: true,
-        isExecuted: true
-      },
-      {
-        id: "2",
-        type: "TRANSFER",
-        amount: 1000.00,
-        currency: "USD",
-        description: "Emergency fund contribution",
-        fromAccount: "Main Checking",
-        toAccount: "Savings Account",
-        scheduledDate: new Date(2025, 9, 1),
-        frequency: "once",
-        isScheduled: true,
-        isExecuted: false
-      },
-      {
-        id: "3",
-        type: "TRANSFER",
-        amount: 200.00,
-        currency: "USD",
-        description: "Cash withdrawal for weekend",
-        fromAccount: "Main Checking",
-        toAccount: "Cash Wallet",
-        scheduledDate: new Date(2025, 8, 29),
-        executedDate: new Date(2025, 8, 29),
-        frequency: "weekly",
-        isScheduled: true,
-        isExecuted: true
-      },
-      {
-        id: "4",
-        type: "TRANSFER",
-        amount: 300.00,
-        currency: "USD",
-        description: "Credit card payment",
-        fromAccount: "Main Checking",
-        toAccount: "Credit Card",
-        scheduledDate: new Date(2025, 9, 5),
-        frequency: "monthly",
-        isScheduled: true,
-        isExecuted: false
-      },
-      {
-        id: "5",
-        type: "TRANSFER",
-        amount: 150.00,
-        currency: "USD",
-        description: "Investment account funding",
-        fromAccount: "Savings Account",
-        toAccount: "Investment Portfolio",
-        scheduledDate: new Date(2025, 9, 10),
-        frequency: "monthly",
-        isScheduled: true,
-        isExecuted: false
+    try {
+      const response = await fetch('/api/transactions')
+      const data = await response.json()
+      
+      if (response.ok) {
+        // Convert API transactions to the format expected by the page
+        const convertedTransactions: Transaction[] = data.transactions.map((tx: any) => ({
+          id: tx.id,
+          type: tx.fromAccountId || tx.toAccountId ? "TRANSFER" : tx.type,
+          amount: tx.amount,
+          currency: tx.currency,
+          description: tx.description,
+          fromAccount: tx.fromAccount?.name || "",
+          toAccount: tx.toAccount?.name || "",
+          scheduledDate: new Date(tx.date),
+          executedDate: new Date(tx.date),
+          frequency: tx.frequency || "once",
+          isScheduled: tx.recurring,
+          isExecuted: true,
+          category: tx.category?.name || ""
+        }))
+        setTransactions(convertedTransactions)
+      } else {
+        console.error('Failed to fetch transactions:', data.error)
+        // Fall back to mock data if needed
       }
-    ]
-    setTransactions(mockTransactions)
+    } catch (error) {
+      console.error('Error fetching transactions:', error)
+    }
   }
 
   const handleAddTransaction = async () => {
-    const transaction: Transaction = {
-      id: Date.now().toString(),
-      type: transactionType,
-      ...newTransaction,
-      isScheduled: true,
-      isExecuted: false
+    try {
+      const transactionData = {
+        description: newTransaction.description,
+        amount: newTransaction.amount,
+        currency: newTransaction.currency,
+        type: transactionType,
+        recurring: newTransaction.frequency !== "once",
+        frequency: newTransaction.frequency !== "once" ? newTransaction.frequency : null,
+        date: newTransaction.scheduledDate.toISOString()
+      }
+
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(transactionData)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Refresh transactions list
+        fetchTransactions()
+        setNewTransaction({
+          amount: 0,
+          currency: "LKR",
+          description: "",
+          fromAccount: "",
+          toAccount: "",
+          scheduledDate: new Date(),
+          frequency: "once",
+          category: ""
+        })
+        setShowAddForm(false)
+      } else {
+        console.error('Failed to add transaction:', data.error)
+      }
+    } catch (error) {
+      console.error('Error adding transaction:', error)
     }
-    setTransactions([...transactions, transaction])
-    setNewTransaction({
-      amount: 0,
-      currency: "USD",
-      description: "",
-      fromAccount: "",
-      toAccount: "",
-      scheduledDate: new Date(),
-      frequency: "once",
-      category: ""
-    })
-    setShowAddForm(false)
   }
 
   const executeTransaction = (transactionId: string) => {
@@ -201,6 +197,57 @@ export default function TransactionsPage() {
         return <ArrowUpRight className="h-4 w-4 text-red-600" />
       default:
         return <ArrowLeftRight className="h-4 w-4" />
+    }
+  }
+
+  const handleSelectTransaction = (transactionId: string) => {
+    setSelectedTransactions(prev => 
+      prev.includes(transactionId)
+        ? prev.filter(id => id !== transactionId)
+        : [...prev, transactionId]
+    )
+  }
+
+  const handleSelectAll = () => {
+    if (selectedTransactions.length === transactions.length) {
+      setSelectedTransactions([])
+    } else {
+      setSelectedTransactions(transactions.map(t => t.id))
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    try {
+      // Delete each selected transaction
+      const deletePromises = selectedTransactions.map(id =>
+        fetch(`/api/transactions/${id}`, { method: 'DELETE' })
+      )
+      
+      await Promise.all(deletePromises)
+      
+      // Refresh transactions list
+      fetchTransactions()
+      setSelectedTransactions([])
+      setShowDeleteDialog(false)
+    } catch (error) {
+      console.error('Error deleting transactions:', error)
+    }
+  }
+
+  const handleClearAll = async () => {
+    try {
+      // Get all transaction IDs and delete them
+      const deletePromises = transactions.map(transaction =>
+        fetch(`/api/transactions/${transaction.id}`, { method: 'DELETE' })
+      )
+      
+      await Promise.all(deletePromises)
+      
+      // Refresh transactions list
+      fetchTransactions()
+      setShowClearAllDialog(false)
+    } catch (error) {
+      console.error('Error clearing all transactions:', error)
     }
   }
 
@@ -271,6 +318,25 @@ export default function TransactionsPage() {
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
+            {selectedTransactions.length > 0 && (
+              <Button 
+                variant="destructive" 
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Selected ({selectedTransactions.length})
+              </Button>
+            )}
+            {transactions.length > 0 && (
+              <Button 
+                variant="outline" 
+                className="text-red-600 hover:text-red-700"
+                onClick={() => setShowClearAllDialog(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Clear All
+              </Button>
+            )}
             <Button onClick={() => setShowAddForm(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Schedule Transaction
@@ -292,7 +358,7 @@ export default function TransactionsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-700">
-                ${totalScheduled.toFixed(2)}
+                {formatCurrency(totalScheduled, "LKR")}
               </div>
               <p className="text-xs text-blue-600">Pending execution</p>
             </CardContent>
@@ -340,8 +406,21 @@ export default function TransactionsPage() {
         >
           <Card className="border-0 shadow-lg">
             <CardHeader>
-              <CardTitle>Scheduled Transfers</CardTitle>
-              <CardDescription>Manage your account transfers and scheduled transactions</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Scheduled Transfers</CardTitle>
+                  <CardDescription>Manage your account transfers and scheduled transactions</CardDescription>
+                </div>
+                {transactions.length > 0 && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      checked={selectedTransactions.length === transactions.length}
+                      onCheckedChange={handleSelectAll}
+                    />
+                    <span className="text-sm text-muted-foreground">Select All</span>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -358,6 +437,10 @@ export default function TransactionsPage() {
                       }`}
                     >
                       <div className="flex items-center space-x-4">
+                        <Checkbox
+                          checked={selectedTransactions.includes(transaction.id)}
+                          onCheckedChange={() => handleSelectTransaction(transaction.id)}
+                        />
                         <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
                           {getTransactionIcon(transaction.type)}
                         </div>
@@ -382,7 +465,7 @@ export default function TransactionsPage() {
                       <div className="flex items-center space-x-4">
                         <div className="text-right">
                           <div className="text-lg font-bold">
-                            ${transaction.amount.toFixed(2)}
+                            {formatCurrency(transaction.amount, transaction.currency || "LKR")}
                           </div>
                           <div className="text-sm text-muted-foreground">
                             {transaction.isExecuted && transaction.executedDate
@@ -466,7 +549,7 @@ export default function TransactionsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="amount">Amount</Label>
+                  <Label htmlFor="amount">Amount (Rs.)</Label>
                   <Input
                     id="amount"
                     type="number"
@@ -587,6 +670,52 @@ export default function TransactionsPage() {
                 disabled={!newTransaction.description || newTransaction.amount <= 0}
               >
                 Schedule Transaction
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Selected Confirmation Dialog */}
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Selected Transactions</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-muted-foreground">
+                Are you sure you want to delete {selectedTransactions.length} selected transaction{selectedTransactions.length > 1 ? 's' : ''}? 
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteSelected}>
+                Delete {selectedTransactions.length} Transaction{selectedTransactions.length > 1 ? 's' : ''}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Clear All Confirmation Dialog */}
+        <Dialog open={showClearAllDialog} onOpenChange={setShowClearAllDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Clear All Transactions</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-muted-foreground">
+                Are you sure you want to delete all {transactions.length} transactions? 
+                This action cannot be undone and will permanently remove all transaction data.
+              </p>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowClearAllDialog(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleClearAll}>
+                Clear All Transactions
               </Button>
             </div>
           </DialogContent>

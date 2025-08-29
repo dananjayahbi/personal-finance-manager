@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 export async function GET(request: NextRequest) {
   try {
     // In a real app, you would get the user ID from the session
-    const userId = request.headers.get("x-user-id") || "default-user-id"
+    const userId = request.headers.get("x-user-id") || "user-1"
 
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type")
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     // In a real app, you would get the user ID from the session
-    const userId = request.headers.get("x-user-id") || "default-user-id"
+    const userId = request.headers.get("x-user-id") || "user-1"
 
     const transaction = await db.transaction.create({
       data: {

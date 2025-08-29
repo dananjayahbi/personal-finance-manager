@@ -6,17 +6,17 @@ export async function GET(request: NextRequest) {
     // In a real app, you would get the user ID from the session
     const userId = request.headers.get("x-user-id") || "user-1"
 
-    const categories = await db.category.findMany({
+    const bills = await db.bill.findMany({
       where: { userId },
-      orderBy: { name: "asc" }
+      orderBy: { dueDate: "asc" }
     })
 
     return NextResponse.json({
-      categories
+      bills
     })
 
   } catch (error) {
-    console.error("Categories fetch error:", error)
+    console.error("Bills fetch error:", error)
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -26,11 +26,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, type, icon, color } = await request.json()
+    const { name, amount, currency, dueDate, frequency, categoryId, description, isRecurring } = await request.json()
 
-    if (!name || !type) {
+    if (!name || !amount || !dueDate) {
       return NextResponse.json(
-        { error: "Name and type are required" },
+        { error: "Name, amount, and due date are required" },
         { status: 400 }
       )
     }
@@ -38,35 +38,28 @@ export async function POST(request: NextRequest) {
     // In a real app, you would get the user ID from the session
     const userId = request.headers.get("x-user-id") || "user-1"
 
-    // Check if category with this name already exists for this user
-    const existingCategory = await db.category.findFirst({
-      where: { name, userId }
-    })
-
-    if (existingCategory) {
-      return NextResponse.json(
-        { error: "Category with this name already exists" },
-        { status: 409 }
-      )
-    }
-
-    const category = await db.category.create({
+    const bill = await db.bill.create({
       data: {
         name,
-        type,
-        icon: icon || "📝",
-        color: color || "#6b7280",
+        amount: parseFloat(amount),
+        currency: currency || "USD",
+        dueDate: new Date(dueDate),
+        frequency: frequency || "MONTHLY",
+        categoryId: categoryId || null,
+        description: description || "",
+        isRecurring: isRecurring || false,
+        isPaid: false,
         userId
       }
     })
 
     return NextResponse.json({
-      message: "Category created successfully",
-      category
+      message: "Bill created successfully",
+      bill
     })
 
   } catch (error) {
-    console.error("Category creation error:", error)
+    console.error("Bill creation error:", error)
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

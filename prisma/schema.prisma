@@ -18,7 +18,7 @@ model User {
   email              String   @unique
   name               String?
   passwordHash       String?
-  preferredCurrency  String   @default("USD")
+  preferredCurrency  String   @default("LKR")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -55,7 +55,7 @@ model Category {
 model Transaction {
   id          String        @id @default(cuid())
   amount      Float
-  currency    String        @default("USD")
+  currency    String        @default("LKR")
   description String?
   date        DateTime      @default(now())
   type        TransactionType
@@ -79,7 +79,7 @@ model Budget {
   id          String        @id @default(cuid())
   name        String
   amount      Float
-  currency    String        @default("USD")
+  currency    String        @default("LKR")
   period      BudgetPeriod
   startDate   DateTime
   endDate     DateTime
@@ -98,7 +98,7 @@ model Goal {
   name          String
   targetAmount  Float
   currentAmount Float    @default(0)
-  currency      String   @default("USD")
+  currency      String   @default("LKR")
   deadline      DateTime?
   userId        String
   createdAt     DateTime @default(now())
@@ -133,6 +133,7 @@ enum CategoryType {
 enum TransactionType {
   INCOME
   EXPENSE
+  TRANSFER
 }
 
 enum BudgetPeriod {
@@ -156,7 +157,7 @@ model Account {
   name                  String
   type                  AccountType
   balance               Float    @default(0)
-  currency              String   @default("USD")
+  currency              String   @default("LKR")
   description           String?
   isActive              Boolean  @default(true)
   userId                String
@@ -173,7 +174,7 @@ model Bill {
   id          String   @id @default(cuid())
   name        String
   amount      Float
-  currency    String   @default("USD")
+  currency    String   @default("LKR")
   dueDate     DateTime
   frequency   BillFrequency
   categoryId  String?
@@ -219,7 +220,7 @@ model Notification {
 model ScheduledTransaction {
   id              String      @id @default(cuid())
   amount          Float
-  currency        String      @default("USD")
+  currency        String      @default("LKR")
   description     String
   fromAccountId   String
   toAccountId     String

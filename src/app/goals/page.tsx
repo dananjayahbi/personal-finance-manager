@@ -1,5 +1,6 @@
 "use client"
 
+import { formatCurrency } from "@/lib/currency"
 import { useState, useEffect } from "react"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -60,7 +61,7 @@ export default function GoalsPage() {
     name: "",
     targetAmount: 0,
     currentAmount: 0,
-    currency: "USD",
+    currency: "LKR",
     deadline: undefined as Date | undefined,
     description: "",
     category: "Other"
@@ -71,94 +72,76 @@ export default function GoalsPage() {
   }, [])
 
   const fetchGoals = async () => {
-    // Mock data for demonstration
-    const mockGoals: Goal[] = [
-      {
-        id: "1",
-        name: "Emergency Fund",
-        targetAmount: 10000,
-        currentAmount: 8500,
-        currency: "USD",
-        deadline: new Date(2025, 11, 31),
-        description: "Build a 6-month emergency fund for financial security",
-        category: "Emergency",
-        progress: 85,
-        monthlyTarget: 500,
-        isCompleted: false
-      },
-      {
-        id: "2",
-        name: "Vacation to Europe",
-        targetAmount: 5000,
-        currentAmount: 2100,
-        currency: "USD",
-        deadline: new Date(2026, 5, 15),
-        description: "Two-week trip to Europe including flights, hotels, and activities",
-        category: "Travel",
-        progress: 42,
-        monthlyTarget: 300,
-        isCompleted: false
-      },
-      {
-        id: "3",
-        name: "New Car Down Payment",
-        targetAmount: 15000,
-        currentAmount: 12000,
-        currency: "USD",
-        deadline: new Date(2025, 9, 30),
-        description: "Down payment for a reliable used car",
-        category: "Transportation",
-        progress: 80,
-        monthlyTarget: 1000,
-        isCompleted: false
-      },
-      {
-        id: "4",
-        name: "Home Down Payment",
-        targetAmount: 60000,
-        currentAmount: 15000,
-        currency: "USD",
-        deadline: new Date(2027, 3, 1),
-        description: "20% down payment for first home purchase",
-        category: "Housing",
-        progress: 25,
-        monthlyTarget: 1500,
-        isCompleted: false
-      },
-      {
-        id: "5",
-        name: "MacBook Pro",
-        targetAmount: 2500,
-        currentAmount: 2500,
-        currency: "USD",
-        deadline: new Date(2025, 6, 1),
-        description: "New laptop for work and personal projects",
-        category: "Technology",
-        progress: 100,
-        isCompleted: true
+    try {
+      const response = await fetch('/api/goals')
+      const data = await response.json()
+      
+      if (response.ok) {
+        // Calculate progress for each goal and add UI-specific fields
+        const goalsWithProgress = data.goals.map((goal: any) => {
+          const progress = goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0
+          const isCompleted = progress >= 100
+          
+          return {
+            ...goal,
+            deadline: goal.deadline ? new Date(goal.deadline) : undefined,
+            progress,
+            isCompleted,
+            category: "Other", // Default category since it's not in the database model
+            monthlyTarget: 0 // Default since it's not in the database model
+          }
+        })
+        setGoals(goalsWithProgress)
+      } else {
+        console.error('Failed to fetch goals:', data.error)
+        // Fall back to empty array if needed
+        setGoals([])
       }
-    ]
-    setGoals(mockGoals)
+    } catch (error) {
+      console.error('Error fetching goals:', error)
+      setGoals([])
+    }
   }
 
   const handleAddGoal = async () => {
-    const goal: Goal = {
-      id: Date.now().toString(),
-      ...newGoal,
-      progress: newGoal.targetAmount > 0 ? (newGoal.currentAmount / newGoal.targetAmount) * 100 : 0,
-      isCompleted: false
+    try {
+      const goalData = {
+        name: newGoal.name,
+        targetAmount: newGoal.targetAmount,
+        currentAmount: newGoal.currentAmount,
+        currency: newGoal.currency,
+        deadline: newGoal.deadline ? newGoal.deadline.toISOString() : null
+      }
+
+      const response = await fetch('/api/goals', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(goalData)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Refresh goals list
+        fetchGoals()
+        setNewGoal({
+          name: "",
+          targetAmount: 0,
+          currentAmount: 0,
+          currency: "LKR",
+          deadline: undefined,
+          description: "",
+          category: "Other"
+        })
+        setShowAddForm(false)
+      } else {
+        console.error('Failed to add goal:', data.error)
+      }
+    } catch (error) {
+      console.error('Error adding goal:', error)
     }
-    setGoals([...goals, goal])
-    setNewGoal({
-      name: "",
-      targetAmount: 0,
-      currentAmount: 0,
-      currency: "USD",
-      deadline: undefined,
-      description: "",
-      category: "Other"
-    })
-    setShowAddForm(false)
   }
 
   const handleEditGoal = (goal: Goal) => {
@@ -464,8 +447,8 @@ export default function GoalsPage() {
                         className={`h-2 ${getProgressColor(goal.progress)}`}
                       />
                       <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>${goal.currentAmount.toLocaleString()}</span>
-                        <span>${goal.targetAmount.toLocaleString()}</span>
+                        <span>{formatCurrency(goal.currentAmount, goal.currency || "LKR")}</span>
+                        <span>{formatCurrency(goal.targetAmount, goal.currency || "LKR")}</span>
                       </div>
                     </div>
 

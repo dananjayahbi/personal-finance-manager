@@ -66,90 +66,32 @@ export default function ExpensesPage() {
   }, [])
 
   const fetchExpenses = async () => {
-    // Mock data for demonstration
-    const mockExpenses: Expense[] = [
-      {
-        id: "1",
-        date: "2025-08-28",
-        description: "Grocery shopping at Whole Foods",
-        category: "Food & Dining",
-        amount: 125.50,
-        account: "Main Checking",
-        recurring: false,
-        tags: ["groceries", "weekly"]
-      },
-      {
-        id: "2",
-        date: "2025-08-27",
-        description: "Netflix subscription",
-        category: "Entertainment",
-        amount: 15.99,
-        account: "Credit Card",
-        recurring: true,
-        tags: ["streaming", "monthly"]
-      },
-      {
-        id: "3",
-        date: "2025-08-26",
-        description: "Gas station fill-up",
-        category: "Transportation",
-        amount: 68.75,
-        account: "Main Checking",
-        recurring: false,
-        tags: ["fuel", "car"]
-      },
-      {
-        id: "4",
-        date: "2025-08-25",
-        description: "Coffee shop meeting",
-        category: "Food & Dining",
-        amount: 12.50,
-        account: "Cash Wallet",
-        recurring: false,
-        tags: ["coffee", "business"]
-      },
-      {
-        id: "5",
-        date: "2025-08-24",
-        description: "Electric bill payment",
-        category: "Bills & Utilities",
-        amount: 89.20,
-        account: "Main Checking",
-        recurring: true,
-        tags: ["utilities", "monthly"]
-      },
-      {
-        id: "6",
-        date: "2025-08-23",
-        description: "Amazon online shopping",
-        category: "Shopping",
-        amount: 156.99,
-        account: "Credit Card",
-        recurring: false,
-        tags: ["online", "household"]
-      },
-      {
-        id: "7",
-        date: "2025-08-22",
-        description: "Gym membership",
-        category: "Health & Fitness",
-        amount: 45.00,
-        account: "Main Checking",
-        recurring: true,
-        tags: ["fitness", "monthly"]
-      },
-      {
-        id: "8",
-        date: "2025-08-21",
-        description: "Restaurant dinner",
-        category: "Food & Dining",
-        amount: 78.90,
-        account: "Credit Card",
-        recurring: false,
-        tags: ["dining", "weekend"]
+    try {
+      const response = await fetch('/api/transactions?type=EXPENSE')
+      const data = await response.json()
+      
+      if (response.ok) {
+        // Convert API transactions to expenses format
+        const convertedExpenses: Expense[] = data.transactions.map((tx: any) => ({
+          id: tx.id,
+          date: new Date(tx.date).toISOString().split('T')[0], // Convert to YYYY-MM-DD format
+          description: tx.description || "Expense",
+          category: tx.category?.name || "Other",
+          amount: tx.amount,
+          account: tx.fromAccount?.name || "Unknown",
+          recurring: tx.recurring || false,
+          tags: [] // Default empty tags since it's not in the database model
+        }))
+        setExpenses(convertedExpenses)
+      } else {
+        console.error('Failed to fetch expenses:', data.error)
+        // Fall back to empty array if needed
+        setExpenses([])
       }
-    ]
-    setExpenses(mockExpenses)
+    } catch (error) {
+      console.error('Error fetching expenses:', error)
+      setExpenses([])
+    }
   }
 
   const categories = useMemo(() => {

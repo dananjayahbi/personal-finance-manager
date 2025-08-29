@@ -71,116 +71,109 @@ export default function BillsPage() {
   }, [])
 
   const fetchBills = async () => {
-    // Mock data for demonstration
-    const today = new Date()
-    const mockBills: Bill[] = [
-      {
-        id: "1",
-        name: "Rent Payment",
-        amount: 1200.00,
-        currency: "USD",
-        dueDate: new Date(today.getFullYear(), today.getMonth(), 1),
-        frequency: "MONTHLY",
-        category: "Housing",
-        isPaid: true,
-        isRecurring: true,
-        description: "Monthly apartment rent",
-        daysUntilDue: -27
-      },
-      {
-        id: "2",
-        name: "Electric Bill",
-        amount: 89.20,
-        currency: "USD",
-        dueDate: new Date(today.getFullYear(), today.getMonth(), 15),
-        frequency: "MONTHLY",
-        category: "Utilities",
-        isPaid: false,
-        isRecurring: true,
-        description: "Monthly electricity bill",
-        daysUntilDue: -13
-      },
-      {
-        id: "3",
-        name: "Internet Service",
-        amount: 65.99,
-        currency: "USD",
-        dueDate: new Date(today.getFullYear(), today.getMonth(), 20),
-        frequency: "MONTHLY",
-        category: "Utilities",
-        isPaid: false,
-        isRecurring: true,
-        description: "High-speed internet",
-        daysUntilDue: -8
-      },
-      {
-        id: "4",
-        name: "Car Insurance",
-        amount: 145.50,
-        currency: "USD",
-        dueDate: new Date(today.getFullYear(), today.getMonth() + 1, 5),
-        frequency: "MONTHLY",
-        category: "Insurance",
-        isPaid: false,
-        isRecurring: true,
-        description: "Auto insurance premium",
-        daysUntilDue: 8
-      },
-      {
-        id: "5",
-        name: "Netflix Subscription",
-        amount: 15.99,
-        currency: "USD",
-        dueDate: new Date(today.getFullYear(), today.getMonth() + 1, 12),
-        frequency: "MONTHLY",
-        category: "Entertainment",
-        isPaid: false,
-        isRecurring: true,
-        description: "Streaming service",
-        daysUntilDue: 15
-      },
-      {
-        id: "6",
-        name: "Gym Membership",
-        amount: 45.00,
-        currency: "USD",
-        dueDate: new Date(today.getFullYear(), today.getMonth() + 1, 18),
-        frequency: "MONTHLY",
-        category: "Health & Fitness",
-        isPaid: false,
-        isRecurring: true,
-        description: "Monthly gym membership",
-        daysUntilDue: 21
+    try {
+      const response = await fetch('/api/bills')
+      const data = await response.json()
+      
+      if (response.ok) {
+        // Calculate days until due for each bill
+        const billsWithDaysCalculated = data.bills.map((bill: any) => {
+          const today = new Date()
+          const dueDate = new Date(bill.dueDate)
+          const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+          
+          return {
+            ...bill,
+            dueDate,
+            daysUntilDue,
+            category: bill.category?.name || "Uncategorized"
+          }
+        })
+        setBills(billsWithDaysCalculated)
+      } else {
+        console.error('Failed to fetch bills:', data.error)
+        // Fall back to mock data if needed
+        setBills([])
       }
-    ]
-    setBills(mockBills)
+    } catch (error) {
+      console.error('Error fetching bills:', error)
+      setBills([])
+    }
   }
 
   const handleAddBill = async () => {
-    const bill: Bill = {
-      id: Date.now().toString(),
-      ...newBill,
-      isPaid: false,
-      daysUntilDue: Math.ceil((newBill.dueDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    try {
+      const billData = {
+        name: newBill.name,
+        amount: newBill.amount,
+        currency: newBill.currency,
+        dueDate: newBill.dueDate.toISOString(),
+        frequency: newBill.frequency,
+        categoryId: null, // For now, we'll set this to null
+        description: newBill.description,
+        isRecurring: newBill.isRecurring
+      }
+
+      const response = await fetch('/api/bills', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(billData)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Refresh bills list
+        fetchBills()
+        setNewBill({
+          name: "",
+          amount: 0,
+          currency: "USD",
+          dueDate: new Date(),
+          frequency: "MONTHLY",
+          category: "",
+          description: "",
+          isRecurring: true
+        })
+        setShowAddForm(false)
+      } else {
+        console.error('Failed to add bill:', data.error)
+      }
+    } catch (error) {
+      console.error('Error adding bill:', error)
     }
-    setBills([...bills, bill])
-    setNewBill({
-      name: "",
-      amount: 0,
-      currency: "USD",
-      dueDate: new Date(),
-      frequency: "MONTHLY",
-      category: "",
-      description: "",
-      isRecurring: true
-    })
-    setShowAddForm(false)
   }
 
-  const toggleBillPaid = (billId: string) => {
-    setBills(bills.map(bill => 
-      bill.id === billId ? { ...bill, isPaid: !bill.isPaid } : bill
-    ))
+  const toggleBillPaid = async (billId: string) => {
+    try {
+      const bill = bills.find(b => b.id === billId)
+      if (!bill) return
+
+      const response = await fetch(`/api/bills/${billId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          isPaid: !bill.isPaid
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Update the bill in the local state
+        setBills(bills.map(b => 
+          b.id === billId ? { ...b, isPaid: !b.isPaid } : b
+        ))
+      } else {
+        console.error('Failed to update bill:', data.error)
+      }
+    } catch (error) {
+      console.error('Error updating bill:', error)
+    }
   }
 
   const handleEditBill = (bill: Bill) => {

@@ -18,9 +18,10 @@ interface TransactionFormProps {
   onCancel: () => void
   initialData?: any
   categories: any[]
+  standalone?: boolean // Controls whether to show Card wrapper
 }
 
-export default function TransactionForm({ onSubmit, onCancel, initialData, categories }: TransactionFormProps) {
+export default function TransactionForm({ onSubmit, onCancel, initialData, categories, standalone = true }: TransactionFormProps) {
   const [formData, setFormData] = useState({
     description: initialData?.description || "",
     amount: initialData?.amount || "",
@@ -29,7 +30,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, categ
     date: initialData?.date ? new Date(initialData.date) : new Date(),
     recurring: initialData?.recurring || false,
     frequency: initialData?.frequency || "monthly",
-    currency: initialData?.currency || "USD"
+    currency: initialData?.currency || "LKR"
   })
 
   const [error, setError] = useState("")
@@ -77,21 +78,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, categ
   const incomeCategories = categories.filter(cat => cat.type === "INCOME")
   const expenseCategories = categories.filter(cat => cat.type === "EXPENSE")
 
-  return (
-    <Card className="w-full max-w-lg mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          {initialData ? "Edit Transaction" : "Add Transaction"}
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            <X className="h-4 w-4" />
-          </Button>
-        </CardTitle>
-        <CardDescription>
-          {initialData ? "Update your transaction details" : "Record a new income or expense"}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+  const formContent = (
+    <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
             <Input
@@ -105,7 +93,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, categ
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="amount">Amount</Label>
+              <Label htmlFor="amount">Amount (Rs.)</Label>
               <Input
                 id="amount"
                 type="number"
@@ -229,6 +217,27 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, categ
             </Button>
           </div>
         </form>
+  )
+
+  if (!standalone) {
+    return formContent
+  }
+
+  return (
+    <Card className="w-full max-w-lg mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          {initialData ? "Edit Transaction" : "Add Transaction"}
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            <X className="h-4 w-4" />
+          </Button>
+        </CardTitle>
+        <CardDescription>
+          {initialData ? "Update your transaction details" : "Record a new income or expense"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {formContent}
       </CardContent>
     </Card>
   )

@@ -6,9 +6,41 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { motion } from "framer-motion"
 import TransactionForm from "@/components/transaction-form"
+
+interface Category {
+  id: string
+  name: string
+  type: string
+  icon: string
+}
+
+interface MonthlyTrend {
+  month: string
+  income: number
+  expenses: number
+  savings: number
+}
+
+interface ExpenseCategory {
+  name: string
+  value: number
+  color: string
+}
+
+interface WeeklySpending {
+  day: string
+  amount: number
+}
+
+interface DashboardData {
+  monthlyTrends: MonthlyTrend[]
+  expenseCategories: ExpenseCategory[]
+  weeklySpending: WeeklySpending[]
+}
+
 import {
   LineChart,
   Line,
@@ -79,32 +111,247 @@ const mockData = {
 export default function DashboardContent({ className }: DashboardContentProps) {
   const { user } = useAuth()
   const [showTransactionForm, setShowTransactionForm] = useState(false)
-  const [categories, setCategories] = useState([
-    { id: "1", name: "Food & Dining", type: "EXPENSE", icon: "🍔" },
-    { id: "2", name: "Transportation", type: "EXPENSE", icon: "🚗" },
-    { id: "3", name: "Shopping", type: "EXPENSE", icon: "🛍️" },
-    { id: "4", name: "Entertainment", type: "EXPENSE", icon: "🎬" },
-    { id: "5", name: "Bills & Utilities", type: "EXPENSE", icon: "💡" },
-    { id: "6", name: "Healthcare", type: "EXPENSE", icon: "🏥" },
-    { id: "7", name: "Salary", type: "INCOME", icon: "💼" },
-    { id: "8", name: "Freelance", type: "INCOME", icon: "💻" },
-    { id: "9", name: "Investment", type: "INCOME", icon: "📈" }
-  ])
+  const [categories, setCategories] = useState<Category[]>([])
   const [financialOverview, setFinancialOverview] = useState({
-    totalBalance: 15420.50,
-    monthlyIncome: 5500,
-    monthlyExpenses: 3600,
-    netWorth: 45890.75,
-    totalAccounts: 4,
-    activeGoals: 3,
-    upcomingBills: 5
+    totalBalance: 0,
+    monthlyIncome: 0,
+    monthlyExpenses: 0,
+    netWorth: 0,
+    totalAccounts: 0,
+    activeGoals: 0,
+    upcomingBills: 0
+  })
+  const [dashboardData, setDashboardData] = useState<DashboardData>({
+    monthlyTrends: [],
+    expenseCategories: [],
+    weeklySpending: []
   })
 
+  useEffect(() => {
+    fetchCategories()
+    fetchFinancialOverview()
+    fetchDashboardData()
+  }, [])
+
+  const fetchFinancialOverview = async () => {
+    try {
+      // Fetch accounts for total balance
+      const accountsResponse = await fetch('/api/accounts')
+      const accountsData = await accountsResponse.json()
+      
+      // Fetch transactions for income/expenses 
+      const transactionsResponse = await fetch('/api/transactions')
+      const transactionsData = await transactionsResponse.json()
+      
+      // Fetch goals count
+      const goalsResponse = await fetch('/api/goals')
+      const goalsData = await goalsResponse.json()
+      
+      // Fetch bills count
+      const billsResponse = await fetch('/api/bills')
+      const billsResult = await billsResponse.json()
+      
+      if (accountsResponse.ok && transactionsResponse.ok && goalsResponse.ok && billsResponse.ok) {
+        const accounts = accountsData.accounts || []
+        const transactions = transactionsData.transactions || []
+        const goals = goalsData.goals || []
+        const bills = billsResult.bills || []
+        
+        // Calculate totals
+        const totalBalance = accounts.reduce((sum: number, account: any) => sum + account.balance, 0)
+        const assets = accounts.filter((a: any) => a.balance > 0).reduce((sum: number, account: any) => sum + account.balance, 0)
+        const liabilities = Math.abs(accounts.filter((a: any) => a.balance < 0).reduce((sum: number, account: any) => sum + account.balance, 0))
+        
+        // Calculate monthly income/expenses (last 30 days)
+        const thirtyDaysAgo = new Date()
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        
+        const recentTransactions = transactions.filter((t: any) => new Date(t.date) >= thirtyDaysAgo)
+        const monthlyIncome = recentTransactions
+          .filter((t: any) => t.type === 'INCOME')
+          .reduce((sum: number, t: any) => sum + t.amount, 0)
+        const monthlyExpenses = Math.abs(recentTransactions
+          .filter((t: any) => t.type === 'EXPENSE')
+          .reduce((sum: number, t: any) => sum + t.amount, 0))
+        
+        const upcomingBills = bills.filter((b: any) => !b.isPaid).length
+        
+        setFinancialOverview({
+          totalBalance,
+          monthlyIncome,
+          monthlyExpenses,
+          netWorth: assets - liabilities,
+          totalAccounts: accounts.length,
+          activeGoals: goals.length,
+          upcomingBills
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching financial overview:', error)
+    }
+  }
+
+  const fetchDashboardData = async () => {
+    try {
+      const transactionsResponse = await fetch('/api/transactions')
+      const transactionsData = await transactionsResponse.json()
+      
+      if (transactionsResponse.ok) {
+        const transactions = transactionsData.transactions || []
+        
+        // Generate monthly trends (last 6 months)
+        const monthlyTrends = generateMonthlyTrends(transactions)
+        
+        // Generate expense categories
+        const expenseCategories = generateExpenseCategories(transactions)
+        
+        // Generate weekly spending (last 7 days)
+        const weeklySpending = generateWeeklySpending(transactions)
+        
+        setDashboardData({
+          monthlyTrends,
+          expenseCategories,
+          weeklySpending
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error)
+      // Keep mock data as fallback
+      setDashboardData({
+        monthlyTrends: mockData.monthlyTrends,
+        expenseCategories: mockData.expenseCategories,
+        weeklySpending: mockData.weeklySpending
+      })
+    }
+  }
+
+  const generateMonthlyTrends = (transactions: any[]): MonthlyTrend[] => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const last6Months: MonthlyTrend[] = []
+    
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date()
+      date.setMonth(date.getMonth() - i)
+      const monthIndex = date.getMonth()
+      const year = date.getFullYear()
+      
+      const monthTransactions = transactions.filter(t => {
+        const tDate = new Date(t.date)
+        return tDate.getMonth() === monthIndex && tDate.getFullYear() === year
+      })
+      
+      const income = monthTransactions
+        .filter(t => t.type === 'INCOME')
+        .reduce((sum, t) => sum + t.amount, 0)
+      const expenses = Math.abs(monthTransactions
+        .filter(t => t.type === 'EXPENSE')
+        .reduce((sum, t) => sum + t.amount, 0))
+      
+      last6Months.push({
+        month: months[monthIndex],
+        income,
+        expenses,
+        savings: income - expenses
+      })
+    }
+    
+    return last6Months
+  }
+
+  const generateExpenseCategories = (transactions: any[]): ExpenseCategory[] => {
+    const expenseTransactions = transactions.filter(t => t.type === 'EXPENSE')
+    const categoryTotals: { [key: string]: number } = {}
+    
+    expenseTransactions.forEach(t => {
+      const categoryName = t.category?.name || 'Other'
+      categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + Math.abs(t.amount)
+    })
+    
+    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4']
+    return Object.entries(categoryTotals)
+      .map(([name, value], index) => ({
+        name,
+        value,
+        color: colors[index % colors.length]
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6) // Top 6 categories
+  }
+
+  const generateWeeklySpending = (transactions: any[]): WeeklySpending[] => {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    const last7Days: WeeklySpending[] = []
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date()
+      date.setDate(date.getDate() - i)
+      const dayTransactions = transactions.filter(t => {
+        const tDate = new Date(t.date)
+        return tDate.toDateString() === date.toDateString() && t.type === 'EXPENSE'
+      })
+      
+      const amount = Math.abs(dayTransactions.reduce((sum, t) => sum + t.amount, 0))
+      
+      last7Days.push({
+        day: days[date.getDay() === 0 ? 6 : date.getDay() - 1], // Adjust for Monday start
+        amount
+      })
+    }
+    
+    return last7Days
+  }
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/categories')
+      const data = await response.json()
+      
+      if (response.ok) {
+        setCategories(data.categories)
+      } else {
+        console.error('Failed to fetch categories:', data.error)
+        // Fall back to mock data
+        setCategories([
+          { id: "income-category-1", name: "Salary", type: "INCOME", icon: "💼" },
+          { id: "expense-category-1", name: "Food & Dining", type: "EXPENSE", icon: "🍔" },
+          { id: "2", name: "Transportation", type: "EXPENSE", icon: "🚗" },
+          { id: "3", name: "Shopping", type: "EXPENSE", icon: "🛍️" },
+          { id: "4", name: "Entertainment", type: "EXPENSE", icon: "🎬" },
+          { id: "5", name: "Bills & Utilities", type: "EXPENSE", icon: "💡" },
+          { id: "6", name: "Healthcare", type: "EXPENSE", icon: "🏥" },
+          { id: "8", name: "Freelance", type: "INCOME", icon: "�" },
+          { id: "9", name: "Investment", type: "INCOME", icon: "�" }
+        ])
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    }
+  }
+  
   const handleTransactionSubmit = async (transaction: any) => {
-    // Here you would typically save to database
-    console.log("Transaction submitted:", transaction)
-    setShowTransactionForm(false)
-    // You could refresh financial data here
+    try {
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(transaction),
+      })
+      
+      const data = await response.json()
+      
+      if (response.ok) {
+        console.log("Transaction created successfully:", data.transaction)
+        setShowTransactionForm(false)
+        // Refresh financial data
+        fetchFinancialOverview()
+        fetchDashboardData()
+      } else {
+        console.error('Failed to create transaction:', data.error)
+      }
+    } catch (error) {
+      console.error('Error creating transaction:', error)
+    }
   }
 
   const cardVariants = {
@@ -293,7 +540,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={mockData.monthlyTrends}>
+                <AreaChart data={dashboardData.monthlyTrends}>
                   <defs>
                     <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
@@ -342,7 +589,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={mockData.expenseCategories}
+                    data={dashboardData.expenseCategories}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
@@ -351,7 +598,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
                     fill="#8884d8"
                     dataKey="value"
                   >
-                    {mockData.expenseCategories.map((entry, index) => (
+                    {dashboardData.expenseCategories.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -371,7 +618,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={mockData.weeklySpending}>
+                <BarChart data={dashboardData.weeklySpending}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="day" />
                   <YAxis />
@@ -473,11 +720,15 @@ export default function DashboardContent({ className }: DashboardContentProps) {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Add New Transaction</DialogTitle>
+            <DialogDescription>
+              Record a new income or expense transaction
+            </DialogDescription>
           </DialogHeader>
           <TransactionForm 
             categories={categories}
             onSubmit={handleTransactionSubmit}
             onCancel={() => setShowTransactionForm(false)}
+            standalone={false}
           />
         </DialogContent>
       </Dialog>

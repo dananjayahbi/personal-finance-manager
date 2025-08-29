@@ -4,11 +4,11 @@ import { db } from "@/lib/db"
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = await params
-    const { description, amount, type, categoryId, date, recurring, frequency, currency } = await request.json()
+    const { name, type, balance, currency, description, isActive } = await request.json()
 
-    if (!description || !amount || !type || !date) {
+    if (!name || !type) {
       return NextResponse.json(
-        { error: "Description, amount, type, and date are required" },
+        { error: "Name and type are required" },
         { status: 400 }
       )
     }
@@ -16,41 +16,36 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     // In a real app, you would get the user ID from the session and verify ownership
     const userId = request.headers.get("x-user-id") || "user-1"
 
-    const existingTransaction = await db.transaction.findFirst({
+    const existingAccount = await db.account.findFirst({
       where: { id, userId }
     })
 
-    if (!existingTransaction) {
+    if (!existingAccount) {
       return NextResponse.json(
-        { error: "Transaction not found" },
+        { error: "Account not found" },
         { status: 404 }
       )
     }
 
-    const transaction = await db.transaction.update({
+    const account = await db.account.update({
       where: { id },
       data: {
-        description,
-        amount: parseFloat(amount),
+        name,
         type,
-        categoryId: categoryId || null,
-        date: new Date(date),
-        recurring: recurring || false,
-        frequency: recurring ? frequency : null,
-        currency: currency || "USD"
-      },
-      include: {
-        category: true
+        balance: parseFloat(balance),
+        currency: currency || "USD",
+        description: description || null,
+        isActive: isActive !== undefined ? isActive : true
       }
     })
 
     return NextResponse.json({
-      message: "Transaction updated successfully",
-      transaction
+      message: "Account updated successfully",
+      account
     })
 
   } catch (error) {
-    console.error("Transaction update error:", error)
+    console.error("Account update error:", error)
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -65,27 +60,27 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     // In a real app, you would get the user ID from the session and verify ownership
     const userId = request.headers.get("x-user-id") || "user-1"
 
-    const existingTransaction = await db.transaction.findFirst({
+    const existingAccount = await db.account.findFirst({
       where: { id, userId }
     })
 
-    if (!existingTransaction) {
+    if (!existingAccount) {
       return NextResponse.json(
-        { error: "Transaction not found" },
+        { error: "Account not found" },
         { status: 404 }
       )
     }
 
-    await db.transaction.delete({
+    await db.account.delete({
       where: { id }
     })
 
     return NextResponse.json({
-      message: "Transaction deleted successfully"
+      message: "Account deleted successfully"
     })
 
   } catch (error) {
-    console.error("Transaction deletion error:", error)
+    console.error("Account deletion error:", error)
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

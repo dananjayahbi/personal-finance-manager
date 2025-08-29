@@ -14,7 +14,7 @@ async function main() {
       email: 'demo@example.com',
       name: 'Demo User',
       passwordHash: '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj1VQp3Ap6Vu', // bcrypt hash for 'password'
-      preferredCurrency: 'USD',
+      preferredCurrency: 'LKR',
     },
   })
 
@@ -51,8 +51,8 @@ async function main() {
     update: {},
     create: {
       id: 'transaction-1',
-      amount: 5000,
-      currency: 'USD',
+      amount: 150000, // ~$470 USD equivalent
+      currency: 'LKR',
       description: 'Monthly Salary',
       type: 'INCOME',
       userId: user.id,
@@ -67,15 +67,274 @@ async function main() {
     create: {
       id: 'goal-1',
       name: 'Emergency Fund',
-      targetAmount: 10000,
-      currentAmount: 2500,
-      currency: 'USD',
+      targetAmount: 3200000, // ~$10,000 USD equivalent
+      currentAmount: 800000, // ~$2,500 USD equivalent
+      currency: 'LKR',
+      userId: user.id,
+    },
+  })
+
+  // Create sample accounts
+  const checkingAccount = await prisma.account.upsert({
+    where: { id: 'account-1' },
+    update: {},
+    create: {
+      id: 'account-1',
+      name: 'Main Checking',
+      type: 'BANK',
+      balance: 5420.50,
+      currency: 'LKR',
+      description: 'Primary checking account',
+      isActive: true,
+      userId: user.id,
+    },
+  })
+
+  const savingsAccount = await prisma.account.upsert({
+    where: { id: 'account-2' },
+    update: {},
+    create: {
+      id: 'account-2',
+      name: 'Savings Account',
+      type: 'SAVINGS',
+      balance: 12500.00,
+      currency: 'LKR',
+      description: 'Emergency fund savings',
+      isActive: true,
+      userId: user.id,
+    },
+  })
+
+  const cashAccount = await prisma.account.upsert({
+    where: { id: 'account-3' },
+    update: {},
+    create: {
+      id: 'account-3',
+      name: 'Cash Wallet',
+      type: 'CASH',
+      balance: 280.00,
+      currency: 'LKR',
+      description: 'Physical cash on hand',
+      isActive: true,
+      userId: user.id,
+    },
+  })
+
+  const creditAccount = await prisma.account.upsert({
+    where: { id: 'account-4' },
+    update: {},
+    create: {
+      id: 'account-4',
+      name: 'Credit Card',
+      type: 'CREDIT_CARD',
+      balance: -1250.75,
+      currency: 'LKR',
+      description: 'Visa rewards card',
+      isActive: true,
+      userId: user.id,
+    },
+  })
+
+  // Create sample bills
+  const electricBill = await prisma.bill.upsert({
+    where: { id: 'bill-1' },
+    update: {},
+    create: {
+      id: 'bill-1',
+      name: 'Electric Bill',
+      amount: 28500, // ~$89 USD equivalent
+      currency: 'LKR',
+      dueDate: new Date(2025, 8, 15), // September 15, 2025
+      frequency: 'MONTHLY',
+      categoryId: null,
+      userId: user.id,
+      isPaid: false,
+      isRecurring: true,
+      description: 'Monthly electricity bill',
+    },
+  })
+
+  const rentBill = await prisma.bill.upsert({
+    where: { id: 'bill-2' },
+    update: {},
+    create: {
+      id: 'bill-2',
+      name: 'Rent Payment',
+      amount: 384000, // ~$1200 USD equivalent
+      currency: 'LKR',
+      dueDate: new Date(2025, 8, 1), // September 1, 2025
+      frequency: 'MONTHLY',
+      categoryId: null,
+      userId: user.id,
+      isPaid: true,
+      isRecurring: true,
+      description: 'Monthly apartment rent',
+    },
+  })
+
+  // Create more goals
+  const vacationGoal = await prisma.goal.upsert({
+    where: { id: 'goal-2' },
+    update: {},
+    create: {
+      id: 'goal-2',
+      name: 'Vacation to Europe',
+      targetAmount: 5000,
+      currentAmount: 2100,
+      currency: 'LKR',
+      deadline: new Date(2026, 5, 15), // June 15, 2026
+      userId: user.id,
+    },
+  })
+
+  const carGoal = await prisma.goal.upsert({
+    where: { id: 'goal-3' },
+    update: {},
+    create: {
+      id: 'goal-3',
+      name: 'New Car Down Payment',
+      targetAmount: 15000,
+      currentAmount: 12000,
+      currency: 'LKR',
+      deadline: new Date(2025, 9, 30), // October 30, 2025
+      userId: user.id,
+    },
+  })
+
+  // Create sample notifications
+  const billNotification = await prisma.notification.upsert({
+    where: { id: 'notification-1' },
+    update: {},
+    create: {
+      id: 'notification-1',
+      title: 'Electric Bill Due Soon',
+      message: 'Your electric bill of $89.20 is due in 3 days. Don\'t forget to pay it on time.',
+      type: 'BILL_DUE',
+      isRead: false,
+      actionUrl: '/bills',
+      userId: user.id,
+    },
+  })
+
+  const goalNotification = await prisma.notification.upsert({
+    where: { id: 'notification-2' },
+    update: {},
+    create: {
+      id: 'notification-2',
+      title: 'Goal Progress Update',
+      message: 'You\'re 80% complete with your New Car Down Payment goal! Only $3,000 remaining.',
+      type: 'GOAL_DEADLINE',
+      isRead: false,
+      actionUrl: '/goals',
+      userId: user.id,
+    },
+  })
+
+  const lowBalanceNotification = await prisma.notification.upsert({
+    where: { id: 'notification-3' },
+    update: {},
+    create: {
+      id: 'notification-3',
+      title: 'Low Balance Alert',
+      message: 'Your Cash Wallet balance is low ($280.00). Consider adding funds.',
+      type: 'LOW_BALANCE',
+      isRead: true,
+      actionUrl: '/accounts',
+      userId: user.id,
+    },
+  })
+
+  // Create sample activities
+  const transactionActivity = await prisma.activity.upsert({
+    where: { id: 'activity-1' },
+    update: {},
+    create: {
+      id: 'activity-1',
+      type: 'TRANSACTION_CREATED',
+      description: 'Created transaction: Grocery Shopping at Whole Foods',
+      metadata: JSON.stringify({
+        amount: -89.45,
+        account: 'Main Checking',
+        category: 'Food & Dining',
+        transactionType: 'EXPENSE',
+        merchant: 'Whole Foods Market'
+      }),
+      userId: user.id,
+    },
+  })
+
+  const billPaidActivity = await prisma.activity.upsert({
+    where: { id: 'activity-2' },
+    update: {},
+    create: {
+      id: 'activity-2',
+      type: 'BILL_PAID',
+      description: 'Paid Electric Bill - Monthly electric utility payment',
+      metadata: JSON.stringify({
+        amount: -89.20,
+        account: 'Main Checking',
+        category: 'Utilities',
+        billName: 'Electric Bill'
+      }),
+      userId: user.id,
+    },
+  })
+
+  const goalActivity = await prisma.activity.upsert({
+    where: { id: 'activity-3' },
+    update: {},
+    create: {
+      id: 'activity-3',
+      type: 'GOAL_UPDATED',
+      description: 'Updated Emergency Fund goal - Added $500 progress',
+      metadata: JSON.stringify({
+        amount: 500.00,
+        goalName: 'Emergency Fund',
+        progress: '80%'
+      }),
+      userId: user.id,
+    },
+  })
+
+  const accountActivity = await prisma.activity.upsert({
+    where: { id: 'activity-4' },
+    update: {},
+    create: {
+      id: 'activity-4',
+      type: 'ACCOUNT_CREATED',
+      description: 'Created new account: Investment Portfolio',
+      metadata: JSON.stringify({
+        accountName: 'Investment Portfolio',
+        accountType: 'INVESTMENT',
+        initialBalance: 2500.00
+      }),
       userId: user.id,
     },
   })
 
   console.log('✅ Database seeded successfully!')
-  console.log({ user, incomeCategory, expenseCategory, transaction, goal })
+  console.log({ 
+    user, 
+    incomeCategory, 
+    expenseCategory, 
+    transaction, 
+    goal, 
+    vacationGoal, 
+    carGoal,
+    checkingAccount, 
+    savingsAccount, 
+    cashAccount, 
+    creditAccount,
+    electricBill,
+    rentBill,
+    billNotification,
+    goalNotification,
+    lowBalanceNotification,
+    transactionActivity,
+    billPaidActivity,
+    goalActivity,
+    accountActivity
+  })
 }
 
 main()

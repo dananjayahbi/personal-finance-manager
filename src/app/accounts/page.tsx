@@ -1,5 +1,6 @@
 "use client"
 
+import { formatCurrency } from "@/lib/currency"
 import { useState, useEffect } from "react"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -49,7 +50,7 @@ export default function AccountsPage() {
     name: "",
     type: "BANK",
     balance: 0,
-    currency: "USD",
+    currency: "LKR",
     description: ""
   })
 
@@ -58,46 +59,58 @@ export default function AccountsPage() {
   }, [])
 
   const fetchAccounts = async () => {
-    // Mock data for now
-    const mockAccounts: Account[] = [
-      {
-        id: "1",
-        name: "Main Checking",
-        type: "BANK",
-        balance: 5420.50,
-        currency: "USD",
-        description: "Primary checking account",
-        isActive: true
-      },
-      {
-        id: "2",
-        name: "Savings Account",
-        type: "SAVINGS",
-        balance: 12500.00,
-        currency: "USD",
-        description: "Emergency fund savings",
-        isActive: true
-      },
-      {
-        id: "3",
-        name: "Cash Wallet",
-        type: "CASH",
-        balance: 280.00,
-        currency: "USD",
-        description: "Physical cash on hand",
-        isActive: true
-      },
-      {
-        id: "4",
-        name: "Credit Card",
-        type: "CREDIT_CARD",
-        balance: -1250.75,
-        currency: "USD",
-        description: "Visa rewards card",
-        isActive: true
+    try {
+      const response = await fetch('/api/accounts')
+      const data = await response.json()
+      
+      if (response.ok) {
+        setAccounts(data.accounts)
+      } else {
+        console.error('Failed to fetch accounts:', data.error)
+        // Fall back to mock data if API fails
+        const mockAccounts: Account[] = [
+          {
+            id: "1",
+            name: "Main Checking",
+            type: "BANK",
+            balance: 5420.50,
+            currency: "LKR",
+            description: "Primary checking account",
+            isActive: true
+          },
+          {
+            id: "2",
+            name: "Savings Account",
+            type: "SAVINGS",
+            balance: 12500.00,
+            currency: "LKR",
+            description: "Emergency fund savings",
+            isActive: true
+          },
+          {
+            id: "3",
+            name: "Cash Wallet",
+            type: "CASH",
+            balance: 280.00,
+            currency: "LKR",
+            description: "Physical cash on hand",
+            isActive: true
+          },
+          {
+            id: "4",
+            name: "Credit Card",
+            type: "CREDIT_CARD",
+            balance: -1250.75,
+            currency: "LKR",
+            description: "Visa rewards card",
+            isActive: true
+          }
+        ]
+        setAccounts(mockAccounts)
       }
-    ]
-    setAccounts(mockAccounts)
+    } catch (error) {
+      console.error('Error fetching accounts:', error)
+    }
   }
 
   const getAccountIcon = (type: string) => {
@@ -126,21 +139,35 @@ export default function AccountsPage() {
     }
   }
 
-  const addAccount = () => {
-    const account: Account = {
-      id: Date.now().toString(),
-      ...newAccount,
-      isActive: true
+  const addAccount = async () => {
+    try {
+      const response = await fetch('/api/accounts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newAccount)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Refresh accounts list
+        fetchAccounts()
+        setNewAccount({
+          name: "",
+          type: "BANK",
+          balance: 0,
+          currency: "LKR",
+          description: ""
+        })
+        setShowAddForm(false)
+      } else {
+        console.error('Failed to add account:', data.error)
+      }
+    } catch (error) {
+      console.error('Error adding account:', error)
     }
-    setAccounts([...accounts, account])
-    setNewAccount({
-      name: "",
-      type: "BANK",
-      balance: 0,
-      currency: "USD",
-      description: ""
-    })
-    setShowAddForm(false)
   }
 
   const handleEditAccount = (account: Account) => {
@@ -155,24 +182,38 @@ export default function AccountsPage() {
     setShowEditForm(true)
   }
 
-  const handleUpdateAccount = () => {
+  const handleUpdateAccount = async () => {
     if (!selectedAccount) return
     
-    const updatedAccounts = accounts.map(account =>
-      account.id === selectedAccount.id
-        ? { ...account, ...newAccount }
-        : account
-    )
-    setAccounts(updatedAccounts)
-    setSelectedAccount(null)
-    setNewAccount({
-      name: "",
-      type: "BANK",
-      balance: 0,
-      currency: "USD",
-      description: ""
-    })
-    setShowEditForm(false)
+    try {
+      const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newAccount)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Refresh accounts list
+        fetchAccounts()
+        setSelectedAccount(null)
+        setNewAccount({
+          name: "",
+          type: "BANK",
+          balance: 0,
+          currency: "LKR",
+          description: ""
+        })
+        setShowEditForm(false)
+      } else {
+        console.error('Failed to update account:', data.error)
+      }
+    } catch (error) {
+      console.error('Error updating account:', error)
+    }
   }
 
   const handleDeleteAccount = (account: Account) => {
@@ -185,15 +226,22 @@ export default function AccountsPage() {
     
     setIsDeleting(true)
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      const updatedAccounts = accounts.filter(account => account.id !== selectedAccount.id)
-      setAccounts(updatedAccounts)
-      setSelectedAccount(null)
-      setShowDeleteModal(false)
+      const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Refresh accounts list
+        fetchAccounts()
+        setSelectedAccount(null)
+        setShowDeleteModal(false)
+      } else {
+        console.error('Failed to delete account:', data.error)
+      }
     } catch (error) {
-      console.error("Failed to delete account:", error)
+      console.error('Error deleting account:', error)
     } finally {
       setIsDeleting(false)
     }
@@ -253,7 +301,7 @@ export default function AccountsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-700">
-                ${totalBalance.toLocaleString()}
+                {formatCurrency(totalBalance, "LKR")}
               </div>
               <p className="text-xs text-green-600">
                 +5.2% from last month
@@ -268,7 +316,7 @@ export default function AccountsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-700">
-                ${totalDebt.toLocaleString()}
+                {formatCurrency(totalDebt, "LKR")}
               </div>
               <p className="text-xs text-red-600">
                 -2.1% from last month
@@ -283,7 +331,7 @@ export default function AccountsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-700">
-                ${netWorth.toLocaleString()}
+                {formatCurrency(netWorth, "LKR")}
               </div>
               <p className="text-xs text-blue-600">
                 +8.7% from last month
@@ -348,7 +396,7 @@ export default function AccountsPage() {
                         account.balance >= 0 ? 'text-green-600' : 'text-red-600'
                       }`}>
                         {showBalances 
-                          ? `${account.balance >= 0 ? '+' : ''}$${Math.abs(account.balance).toLocaleString()}`
+                          ? formatCurrency(account.balance, account.currency || "LKR")
                           : "•••••"
                         }
                       </span>
@@ -419,6 +467,7 @@ export default function AccountsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="LKR">LKR (Rs.)</SelectItem>
                     <SelectItem value="USD">USD ($)</SelectItem>
                     <SelectItem value="EUR">EUR (€)</SelectItem>
                     <SelectItem value="GBP">GBP (£)</SelectItem>
@@ -501,6 +550,7 @@ export default function AccountsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="LKR">LKR (Rs.)</SelectItem>
                     <SelectItem value="USD">USD ($)</SelectItem>
                     <SelectItem value="EUR">EUR (€)</SelectItem>
                     <SelectItem value="GBP">GBP (£)</SelectItem>

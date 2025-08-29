@@ -43,89 +43,27 @@ export default function NotificationsPage() {
   }, [])
 
   const fetchNotifications = async () => {
-    // Mock data for demonstration
-    const mockNotifications: Notification[] = [
-      {
-        id: "1",
-        title: "Electric Bill Due Tomorrow",
-        message: "Your electric bill of $89.20 is due tomorrow (Aug 29). Don't forget to pay it on time to avoid late fees.",
-        type: "BILL_DUE",
-        isRead: false,
-        actionUrl: "/bills",
-        createdAt: new Date(2025, 7, 28, 9, 0),
-        priority: "high"
-      },
-      {
-        id: "2",
-        title: "Scheduled Transfer Overdue",
-        message: "Your scheduled transfer of $500 to Savings Account was supposed to happen yesterday. Please review and execute manually.",
-        type: "SCHEDULED_TRANSACTION",
-        isRead: false,
-        actionUrl: "/transactions",
-        createdAt: new Date(2025, 7, 28, 8, 30),
-        priority: "high"
-      },
-      {
-        id: "3",
-        title: "Goal Deadline Approaching",
-        message: "Your 'New Car Down Payment' goal deadline is in 32 days. You're 80% complete with $3,000 remaining.",
-        type: "GOAL_DEADLINE",
-        isRead: false,
-        actionUrl: "/goals",
-        createdAt: new Date(2025, 7, 28, 7, 15),
-        priority: "medium"
-      },
-      {
-        id: "4",
-        title: "Low Balance Alert",
-        message: "Your Main Checking account balance is below $500. Current balance: $420.50. Consider transferring funds.",
-        type: "LOW_BALANCE",
-        isRead: false,
-        actionUrl: "/accounts",
-        createdAt: new Date(2025, 7, 27, 14, 45),
-        priority: "high"
-      },
-      {
-        id: "5",
-        title: "Monthly Budget Exceeded",
-        message: "You've exceeded your Food & Dining budget by $45.30 this month. Current spending: $345.30 vs budget: $300.",
-        type: "BUDGET_EXCEEDED",
-        isRead: true,
-        actionUrl: "/expenses",
-        createdAt: new Date(2025, 7, 27, 11, 20),
-        priority: "medium"
-      },
-      {
-        id: "6",
-        title: "Emergency Fund Goal Achieved!",
-        message: "Congratulations! You've successfully saved $10,000 for your Emergency Fund goal. Time to set a new goal!",
-        type: "GENERAL",
-        isRead: true,
-        actionUrl: "/goals",
-        createdAt: new Date(2025, 7, 26, 16, 0),
-        priority: "low"
-      },
-      {
-        id: "7",
-        title: "Car Insurance Payment Due",
-        message: "Your car insurance premium of $145.50 is due in 5 days (Sep 2). Auto-pay is not enabled for this bill.",
-        type: "BILL_DUE",
-        isRead: true,
-        actionUrl: "/bills",
-        createdAt: new Date(2025, 7, 26, 9, 30),
-        priority: "medium"
-      },
-      {
-        id: "8",
-        title: "Weekly Spending Summary",
-        message: "You spent $280.50 this week across 12 transactions. This is 15% less than last week. Great job!",
-        type: "GENERAL",
-        isRead: true,
-        createdAt: new Date(2025, 7, 25, 18, 0),
-        priority: "low"
+    try {
+      const response = await fetch('/api/notifications')
+      const data = await response.json()
+      
+      if (response.ok) {
+        // Convert API response to UI format
+        const notificationsWithUiProps = data.notifications.map((notification: any) => ({
+          ...notification,
+          createdAt: new Date(notification.createdAt),
+          priority: "medium" // Default priority since it's not in the database model
+        }))
+        setNotifications(notificationsWithUiProps)
+      } else {
+        console.error('Failed to fetch notifications:', data.error)
+        // Fall back to empty array if needed
+        setNotifications([])
       }
-    ]
-    setNotifications(mockNotifications)
+    } catch (error) {
+      console.error('Error fetching notifications:', error)
+      setNotifications([])
+    }
   }
 
   const getNotificationIcon = (type: string) => {
@@ -176,20 +114,62 @@ export default function NotificationsPage() {
     }
   }
 
-  const markAsRead = (notificationId: string) => {
-    setNotifications(notifications.map(notification => 
-      notification.id === notificationId 
-        ? { ...notification, isRead: true }
-        : notification
-    ))
+  const markAsRead = async (notificationId: string) => {
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          isRead: true
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Update the notification in the local state
+        setNotifications(notifications.map(notification => 
+          notification.id === notificationId 
+            ? { ...notification, isRead: true }
+            : notification
+        ))
+      } else {
+        console.error('Failed to mark notification as read:', data.error)
+      }
+    } catch (error) {
+      console.error('Error marking notification as read:', error)
+    }
   }
 
-  const markAsUnread = (notificationId: string) => {
-    setNotifications(notifications.map(notification => 
-      notification.id === notificationId 
-        ? { ...notification, isRead: false }
-        : notification
-    ))
+  const markAsUnread = async (notificationId: string) => {
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          isRead: false
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Update the notification in the local state
+        setNotifications(notifications.map(notification => 
+          notification.id === notificationId 
+            ? { ...notification, isRead: false }
+            : notification
+        ))
+      } else {
+        console.error('Failed to mark notification as unread:', data.error)
+      }
+    } catch (error) {
+      console.error('Error marking notification as unread:', error)
+    }
   }
 
   const deleteNotification = (notificationId: string) => {

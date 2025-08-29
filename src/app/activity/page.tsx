@@ -70,122 +70,23 @@ export default function ActivityPage() {
   const fetchActivities = async () => {
     setIsLoading(true)
     try {
-      // Mock data for demonstration
-      const mockActivities: ActivityItem[] = [
-        {
-          id: "1",
-          type: "transaction",
-          title: "Grocery Shopping",
-          description: "Weekly grocery shopping at Whole Foods",
-          amount: -89.45,
-          account: "Main Checking",
-          category: "Food & Dining",
-          status: "completed",
-          timestamp: new Date(2025, 7, 28, 14, 30),
-          metadata: { merchant: "Whole Foods Market", location: "Downtown" }
-        },
-        {
-          id: "2",
-          type: "transfer",
-          title: "Savings Transfer",
-          description: "Monthly savings transfer to Emergency Fund",
-          amount: -500.00,
-          account: "Main Checking → Savings",
-          status: "completed",
-          timestamp: new Date(2025, 7, 28, 9, 0),
-          metadata: { fromAccount: "Main Checking", toAccount: "Emergency Savings" }
-        },
-        {
-          id: "3",
-          type: "transaction",
-          title: "Salary Deposit",
-          description: "Monthly salary from TechCorp Inc.",
-          amount: 4500.00,
-          account: "Main Checking",
-          category: "Income",
-          status: "completed",
-          timestamp: new Date(2025, 7, 28, 8, 0),
-          metadata: { employer: "TechCorp Inc.", payPeriod: "August 2025" }
-        },
-        {
-          id: "4",
-          type: "bill_payment",
-          title: "Electric Bill Payment",
-          description: "Monthly electric utility payment",
-          amount: -89.20,
-          account: "Main Checking",
-          category: "Utilities",
-          status: "scheduled",
-          timestamp: new Date(2025, 7, 29, 9, 0),
-          metadata: { billId: "ELEC-001", dueDate: "2025-08-29" }
-        },
-        {
-          id: "5",
-          type: "goal_update",
-          title: "Vacation Fund Goal Updated",
-          description: "Added $200 towards vacation savings goal",
-          amount: 200.00,
-          status: "completed",
-          timestamp: new Date(2025, 7, 27, 16, 45),
-          metadata: { goalName: "Summer Vacation", progress: "65%" }
-        },
-        {
-          id: "6",
-          type: "transaction",
-          title: "Coffee Shop",
-          description: "Morning coffee at Starbucks",
-          amount: -5.75,
-          account: "Main Checking",
-          category: "Food & Dining",
-          status: "completed",
-          timestamp: new Date(2025, 7, 27, 8, 15),
-          metadata: { merchant: "Starbucks", location: "Main St" }
-        },
-        {
-          id: "7",
-          type: "budget_alert",
-          title: "Budget Alert: Food & Dining",
-          description: "You've reached 90% of your Food & Dining budget",
-          status: "completed",
-          timestamp: new Date(2025, 7, 27, 12, 0),
-          metadata: { budgetCategory: "Food & Dining", percentage: 90 }
-        },
-        {
-          id: "8",
-          type: "transaction",
-          title: "Gas Station",
-          description: "Fuel purchase at Shell",
-          amount: -45.60,
-          account: "Main Checking",
-          category: "Transportation",
-          status: "completed",
-          timestamp: new Date(2025, 7, 26, 18, 30),
-          metadata: { merchant: "Shell", location: "Highway 101" }
-        },
-        {
-          id: "9",
-          type: "account_update",
-          title: "Account Settings Updated",
-          description: "Changed notification preferences for Main Checking",
-          status: "completed",
-          timestamp: new Date(2025, 7, 26, 14, 20),
-          metadata: { accountName: "Main Checking", changes: ["notifications"] }
-        },
-        {
-          id: "10",
-          type: "transfer",
-          title: "Failed Transfer",
-          description: "Transfer to Investment Account failed due to insufficient funds",
-          amount: -1000.00,
-          account: "Main Checking → Investment",
-          status: "failed",
-          timestamp: new Date(2025, 7, 26, 10, 0),
-          metadata: { reason: "Insufficient funds", errorCode: "INS_001" }
-        }
-      ]
-      setActivities(mockActivities)
+      const response = await fetch('/api/activities?limit=50')
+      const data = await response.json()
+      
+      if (response.ok) {
+        // Convert the timestamps to Date objects
+        const activitiesWithDates = data.activities.map((activity: any) => ({
+          ...activity,
+          timestamp: new Date(activity.timestamp)
+        }))
+        setActivities(activitiesWithDates)
+      } else {
+        console.error('Failed to fetch activities:', data.error)
+        setActivities([])
+      }
     } catch (error) {
       console.error("Failed to fetch activities:", error)
+      setActivities([])
     } finally {
       setIsLoading(false)
     }

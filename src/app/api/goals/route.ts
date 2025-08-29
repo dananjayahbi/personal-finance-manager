@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     // In a real app, you would get the user ID from the session
     // For now, we'll use a placeholder or get it from the request
-    const userId = request.headers.get("x-user-id") || "default-user-id"
+    const userId = request.headers.get("x-user-id") || "user-1"
 
     const goal = await db.goal.create({
       data: {
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // In a real app, you would get the user ID from the session
-    const userId = request.headers.get("x-user-id") || "default-user-id"
+    const userId = request.headers.get("x-user-id") || "user-1"
 
     const goals = await db.goal.findMany({
       where: { userId },
