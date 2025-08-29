@@ -84,8 +84,17 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       message: "Transaction deleted successfully"
     })
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Transaction deletion error:", error)
+    
+    // Handle Prisma P2025 error (record not found)
+    if (error.code === 'P2025') {
+      return NextResponse.json(
+        { error: "Transaction not found or already deleted" },
+        { status: 404 }
+      )
+    }
+    
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

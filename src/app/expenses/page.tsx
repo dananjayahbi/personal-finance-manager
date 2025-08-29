@@ -64,6 +64,7 @@ export default function ExpensesPage() {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [newExpense, setNewExpense] = useState({
@@ -168,9 +169,16 @@ export default function ExpensesPage() {
   }
 
   const handleEditExpense = (expense: Expense) => {
-    // For now, just log - could open an edit dialog
-    console.log("Edit expense:", expense)
-    // TODO: Implement edit expense functionality
+    setSelectedExpense(expense)
+    setNewExpense({
+      description: expense.description,
+      amount: expense.amount.toString(),
+      category: expense.category,
+      account: expense.account,
+      date: expense.date,
+      notes: expense.notes || ""
+    })
+    setShowEditForm(true)
   }
 
   const handleDeleteExpense = (expense: Expense) => {
@@ -183,12 +191,17 @@ export default function ExpensesPage() {
     
     setIsDeleting(true)
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const response = await fetch(`/api/transactions/${selectedExpense.id}`, {
+        method: 'DELETE',
+      })
       
-      setExpenses(expenses.filter(expense => expense.id !== selectedExpense.id))
-      setSelectedExpense(null)
-      setShowDeleteModal(false)
+      if (response.ok) {
+        setExpenses(expenses.filter(expense => expense.id !== selectedExpense.id))
+        setSelectedExpense(null)
+        setShowDeleteModal(false)
+      } else {
+        console.error("Failed to delete expense:", await response.text())
+      }
     } catch (error) {
       console.error("Failed to delete expense:", error)
     } finally {
@@ -235,12 +248,61 @@ export default function ExpensesPage() {
         setShowAddForm(false)
       } else {
         const errorData = await response.json()
-        console.error('Failed to add expense:', errorData.error)
-        alert('Failed to add expense. Please try again.')
+        console.error("Failed to add expense:", errorData)
+        alert("Failed to add expense. Please try again.")
       }
     } catch (error) {
       console.error("Error adding expense:", error)
-      alert('Failed to add expense. Please try again.')
+      alert("Failed to add expense. Please try again.")
+    }
+  }
+
+  const handleUpdateExpense = async () => {
+    if (!selectedExpense || !newExpense.description || !newExpense.amount || !newExpense.category) {
+      alert("Please fill in all required fields")
+      return
+    }
+
+    try {
+      const expenseData = {
+        description: newExpense.description,
+        amount: parseFloat(newExpense.amount),
+        type: "EXPENSE",
+        currency: "LKR",
+        date: new Date(newExpense.date).toISOString(),
+        categoryId: "expense-category-1", // Default category for now
+        recurring: false
+      }
+
+      const response = await fetch(`/api/transactions/${selectedExpense.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(expenseData)
+      })
+
+      if (response.ok) {
+        // Refresh expenses list
+        fetchExpenses()
+        setNewExpense({
+          description: "",
+          amount: "",
+          category: "",
+          account: "",
+          date: new Date().toISOString().split('T')[0],
+          notes: ""
+        })
+        setSelectedExpense(null)
+        setShowEditForm(false)
+      } else {
+        const errorData = await response.json()
+        console.error("Failed to update expense:", errorData)
+        alert("Failed to update expense. Please try again.")
+      }
+    } catch (error) {
+      console.error("Error updating expense:", error)
+      alert("Failed to update expense. Please try again.")
     }
   }
 
@@ -633,6 +695,117 @@ export default function ExpensesPage() {
                 </Button>
                 <Button onClick={handleAddExpense}>
                   Add Expense
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Expense Dialog */}
+        <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Edit Expense</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description *</Label>
+                <Input
+                  id="edit-description"
+                  placeholder="e.g., Grocery Shopping"
+                  value={newExpense.description}
+                  onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-amount">Amount (Rs.) *</Label>
+                  <Input
+                    id="edit-amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={newExpense.amount}
+                    onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Category *</Label>
+                  <Select value={newExpense.category} onValueChange={(value) => setNewExpense({ ...newExpense, category: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Food & Dining">Food & Dining</SelectItem>
+                      <SelectItem value="Transportation">Transportation</SelectItem>
+                      <SelectItem value="Shopping">Shopping</SelectItem>
+                      <SelectItem value="Utilities">Utilities</SelectItem>
+                      <SelectItem value="Healthcare">Healthcare</SelectItem>
+                      <SelectItem value="Entertainment">Entertainment</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-account">Account</Label>
+                  <Select value={newExpense.account} onValueChange={(value) => setNewExpense({ ...newExpense, account: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Main Checking">Main Checking</SelectItem>
+                      <SelectItem value="Savings Account">Savings Account</SelectItem>
+                      <SelectItem value="Cash Wallet">Cash Wallet</SelectItem>
+                      <SelectItem value="Credit Card">Credit Card</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-date">Date</Label>
+                  <Input
+                    id="edit-date"
+                    type="date"
+                    value={newExpense.date}
+                    onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Textarea
+                  id="edit-notes"
+                  placeholder="Additional notes (optional)"
+                  value={newExpense.notes}
+                  onChange={(e) => setNewExpense({ ...newExpense, notes: e.target.value })}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => {
+                  setShowEditForm(false)
+                  setSelectedExpense(null)
+                  setNewExpense({
+                    description: "",
+                    amount: "",
+                    category: "",
+                    account: "",
+                    date: new Date().toISOString().split('T')[0],
+                    notes: ""
+                  })
+                }}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUpdateExpense}>
+                  Update Expense
                 </Button>
               </div>
             </div>

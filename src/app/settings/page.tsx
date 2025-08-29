@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { toast } from "sonner"
+import { useToast } from "@/hooks/use-toast"
 import { motion } from "framer-motion"
 import {
   User,
@@ -59,6 +59,7 @@ interface UserSettings {
 }
 
 export default function SettingsPage() {
+  const { toast } = useToast()
   const [settings, setSettings] = useState<UserSettings>({
     firstName: "",
     lastName: "",
@@ -98,11 +99,19 @@ export default function SettingsPage() {
         }))
       } else {
         console.error('Failed to fetch settings:', data.error)
-        toast.error('Failed to load settings')
+        toast({
+          title: "Error",
+          description: "Failed to load settings",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error('Error fetching settings:', error)
-      toast.error('Failed to load settings')
+      toast({
+        title: "Error",
+        description: "Failed to load settings",
+        variant: "destructive",
+      })
     }
   }
 
@@ -165,14 +174,25 @@ export default function SettingsPage() {
       const data = await response.json()
 
       if (response.ok) {
-        toast.success("Settings saved successfully!")
+        toast({
+          title: "Success",
+          description: "Settings saved successfully!",
+        })
       } else {
         console.error('Failed to save settings:', data.error)
-        toast.error("Failed to save settings. Please try again.")
+        toast({
+          title: "Error",
+          description: "Failed to save settings. Please try again.",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error('Error saving settings:', error)
-      toast.error("Failed to save settings. Please try again.")
+      toast({
+        title: "Error",
+        description: "Failed to save settings. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
@@ -182,9 +202,16 @@ export default function SettingsPage() {
     try {
       // Simulate data export
       await new Promise(resolve => setTimeout(resolve, 1000))
-      toast.success("Data export initiated. You'll receive an email when ready.")
+      toast({
+        title: "Success",
+        description: "Data export initiated. You'll receive an email when ready.",
+      })
     } catch (error) {
-      toast.error("Failed to export data. Please try again.")
+      toast({
+        title: "Error",
+        description: "Failed to export data. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -211,9 +238,16 @@ export default function SettingsPage() {
       }
       
       setSettings(defaultSettings)
-      toast.info("Settings reset to default values")
+      toast({
+        title: "Success",
+        description: "Settings reset to default values",
+      })
     } catch (error) {
-      toast.error("Failed to reset settings")
+      toast({
+        title: "Error",
+        description: "Failed to reset settings",
+        variant: "destructive",
+      })
     }
   }
 

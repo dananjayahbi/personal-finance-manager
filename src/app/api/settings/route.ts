@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 export async function GET(request: NextRequest) {
   try {
     // In a real app, you'd get the user ID from the session/token
-    const userId = "user123" // Hardcoded for demo
+    const userId = "user-1" // Using the seeded demo user ID
 
     let userSettings = await db.userSettings.findUnique({
       where: { userId },
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     // In a real app, you'd get the user ID from the session/token
-    const userId = "user123" // Hardcoded for demo
+    const userId = "user-1" // Using the seeded demo user ID
 
     const data = await request.json()
 

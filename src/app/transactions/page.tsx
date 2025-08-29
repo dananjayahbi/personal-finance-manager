@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -15,6 +16,8 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
 import { motion } from "framer-motion"
+import { useToast } from "@/hooks/use-toast"
+import TransactionForm from "@/components/transaction-form"
 import {
   Plus,
   ArrowLeftRight,
@@ -57,9 +60,12 @@ interface Account {
 }
 
 export default function TransactionsPage() {
+  const { toast } = useToast()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [transactionType, setTransactionType] = useState<"TRANSFER" | "INCOME" | "EXPENSE">("TRANSFER")
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -179,20 +185,110 @@ export default function TransactionsPage() {
     }
   }
 
-  const executeTransaction = (transactionId: string) => {
-    setTransactions(transactions.map(transaction => 
-      transaction.id === transactionId 
-        ? { ...transaction, isExecuted: true, executedDate: new Date() }
-        : transaction
-    ))
+  const executeTransaction = async (transactionId: string) => {
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          isExecuted: true,
+          executedDate: new Date().toISOString()
+        }),
+      })
+
+      if (response.ok) {
+        setTransactions(transactions.map(transaction => 
+          transaction.id === transactionId 
+            ? { ...transaction, isExecuted: true, executedDate: new Date() }
+            : transaction
+        ))
+      } else {
+        console.error('Failed to execute transaction')
+      }
+    } catch (error) {
+      console.error('Error executing transaction:', error)
+    }
   }
 
-  const reverseExecution = (transactionId: string) => {
-    setTransactions(transactions.map(transaction => 
-      transaction.id === transactionId 
-        ? { ...transaction, isExecuted: false, executedDate: undefined }
-        : transaction
-    ))
+  const handleEdit = (transaction: Transaction) => {
+    setSelectedTransaction(transaction)
+    setTransactionType(transaction.type)
+    setShowEditForm(true)
+  }
+
+  const handleEditSuccess = () => {
+    setShowEditForm(false)
+    setSelectedTransaction(null)
+    fetchTransactions()
+  }
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        setTransactions(transactions.filter(t => t.id !== transactionId))
+        toast({
+          title: "Success",
+          description: "Transaction deleted successfully",
+        })
+      } else {
+        throw new Error('Failed to delete transaction')
+      }
+    } catch (error) {
+      console.error('Error deleting transaction:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete transaction",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const reverseExecution = async (transactionId: string) => {
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          isExecuted: false,
+          executedDate: null
+        }),
+      })
+
+      if (response.ok) {
+        setTransactions(transactions.map(transaction => 
+          transaction.id === transactionId 
+            ? { ...transaction, isExecuted: false, executedDate: undefined }
+            : transaction
+        ))
+        toast({
+          title: "Success",
+          description: "Transaction execution reversed successfully",
+        })
+      } else {
+        const errorText = await response.text()
+        console.error('Failed to reverse execution:', errorText)
+        toast({
+          title: "Error",
+          description: "Failed to reverse execution",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error reversing execution:', error)
+      toast({
+        title: "Error",
+        description: "Failed to reverse execution",
+        variant: "destructive",
+      })
+    }
   }
 
   const exportTransactions = () => {
@@ -530,9 +626,24 @@ export default function TransactionsPage() {
                             >
                               Execute Now
                             </Button>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent>
+                                <DropdownMenuItem onClick={() => handleEdit(transaction)}>
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => handleDeleteTransaction(transaction.id)}
+                                  className="text-destructive"
+                                >
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         )}
                         
@@ -545,9 +656,24 @@ export default function TransactionsPage() {
                             >
                               Undo Execution
                             </Button>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent>
+                                <DropdownMenuItem onClick={() => handleEdit(transaction)}>
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => handleDeleteTransaction(transaction.id)}
+                                  className="text-destructive"
+                                >
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         )}
                       </div>
@@ -727,6 +853,51 @@ export default function TransactionsPage() {
                 Schedule Transaction
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Transaction Dialog */}
+        <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Transaction</DialogTitle>
+            </DialogHeader>
+            {selectedTransaction && (
+              <TransactionForm
+                onSubmit={async (updatedData) => {
+                  try {
+                    const response = await fetch(`/api/transactions/${selectedTransaction.id}`, {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify(updatedData),
+                    })
+
+                    if (response.ok) {
+                      handleEditSuccess()
+                      toast({
+                        title: "Success",
+                        description: "Transaction updated successfully",
+                      })
+                    } else {
+                      throw new Error('Failed to update transaction')
+                    }
+                  } catch (error) {
+                    console.error('Error updating transaction:', error)
+                    toast({
+                      title: "Error",
+                      description: "Failed to update transaction",
+                      variant: "destructive",
+                    })
+                  }
+                }}
+                onCancel={() => setShowEditForm(false)}
+                initialData={selectedTransaction}
+                categories={[]} // Will need to add categories
+                standalone={false}
+              />
+            )}
           </DialogContent>
         </Dialog>
 
