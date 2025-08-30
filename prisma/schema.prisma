@@ -255,6 +255,7 @@ model ScheduledTransaction {
   scheduledDate   DateTime
   frequency       String?     // "once", "daily", "weekly", "monthly", "yearly"
   isExecuted      Boolean     @default(false)
+  executedDate    DateTime?   // When it was actually executed
   userId          String
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt

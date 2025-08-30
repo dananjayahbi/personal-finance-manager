@@ -111,25 +111,25 @@ export default function TransactionsPage() {
 
   const fetchTransactions = async () => {
     try {
-      const response = await fetch('/api/transactions')
+      const response = await fetch('/api/scheduled-transactions')
       const data = await response.json()
       
       if (response.ok) {
-        // Convert API transactions to the format expected by the page
-        const convertedTransactions: Transaction[] = data.transactions.map((tx: any) => ({
+        // Convert API scheduled transactions to the format expected by the page
+        const convertedTransactions: Transaction[] = data.scheduledTransactions.map((tx: any) => ({
           id: tx.id,
-          type: tx.fromAccountId || tx.toAccountId ? "TRANSFER" : tx.type,
+          type: "TRANSFER" as const,
           amount: tx.amount,
           currency: tx.currency,
           description: tx.description,
-          fromAccount: tx.fromAccount?.name || "",
-          toAccount: tx.toAccount?.name || "",
-          scheduledDate: new Date(tx.date),
-          executedDate: tx.recurring ? undefined : new Date(tx.date), // Only set executed date for non-recurring
+          fromAccount: "", // We'll need to populate this from account data
+          toAccount: "", // We'll need to populate this from account data
+          scheduledDate: new Date(tx.scheduledDate),
+          executedDate: tx.executedDate ? new Date(tx.executedDate) : undefined,
           frequency: tx.frequency || "once",
-          isScheduled: tx.recurring,
-          isExecuted: !tx.recurring, // Recurring transactions start as not executed
-          category: tx.category?.name || ""
+          isScheduled: true,
+          isExecuted: tx.isExecuted,
+          category: ""
         }))
         setTransactions(convertedTransactions)
       } else {
@@ -147,16 +147,17 @@ export default function TransactionsPage() {
         description: newTransaction.description,
         amount: parseFloat(newTransaction.amount) || 0,
         currency: newTransaction.currency,
-        type: transactionType,
-        recurring: newTransaction.frequency !== "once",
-        frequency: newTransaction.frequency !== "once" ? newTransaction.frequency : null,
-        date: newTransaction.scheduledDate.toISOString()
+        fromAccountId: "sample-from", // You'll need to map this from account selection
+        toAccountId: "sample-to", // You'll need to map this from account selection
+        scheduledDate: newTransaction.scheduledDate.toISOString(),
+        frequency: newTransaction.frequency
       }
 
-      const response = await fetch('/api/transactions', {
+      const response = await fetch('/api/scheduled-transactions', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-user-id': 'user-1'
         },
         body: JSON.stringify(transactionData)
       })
@@ -177,38 +178,25 @@ export default function TransactionsPage() {
           category: ""
         })
         setShowAddForm(false)
+        toast({
+          title: "Success",
+          description: "Transaction scheduled successfully",
+        })
       } else {
         console.error('Failed to add transaction:', data.error)
+        toast({
+          title: "Error",
+          description: data.error || "Failed to schedule transaction",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error('Error adding transaction:', error)
-    }
-  }
-
-  const executeTransaction = async (transactionId: string) => {
-    try {
-      const response = await fetch(`/api/transactions/${transactionId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          isExecuted: true,
-          executedDate: new Date().toISOString()
-        }),
+      toast({
+        title: "Error",
+        description: "Failed to schedule transaction",
+        variant: "destructive",
       })
-
-      if (response.ok) {
-        setTransactions(transactions.map(transaction => 
-          transaction.id === transactionId 
-            ? { ...transaction, isExecuted: true, executedDate: new Date() }
-            : transaction
-        ))
-      } else {
-        console.error('Failed to execute transaction')
-      }
-    } catch (error) {
-      console.error('Error executing transaction:', error)
     }
   }
 
@@ -224,10 +212,83 @@ export default function TransactionsPage() {
     fetchTransactions()
   }
 
+  const executeTransaction = async (transactionId: string) => {
+    try {
+      const response = await fetch(`/api/scheduled-transactions/${transactionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'user-1'
+        },
+        body: JSON.stringify({ action: 'execute' })
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Transaction executed successfully",
+        })
+        fetchTransactions()
+      } else {
+        const data = await response.json()
+        toast({
+          title: "Error",
+          description: data.error || "Failed to execute transaction",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error executing transaction:', error)
+      toast({
+        title: "Error",
+        description: "Failed to execute transaction",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const reverseExecution = async (transactionId: string) => {
+    try {
+      const response = await fetch(`/api/scheduled-transactions/${transactionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'user-1'
+        },
+        body: JSON.stringify({ action: 'undo' })
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Transaction execution undone successfully",
+        })
+        fetchTransactions()
+      } else {
+        const data = await response.json()
+        toast({
+          title: "Error",
+          description: data.error || "Failed to undo transaction",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error undoing transaction:', error)
+      toast({
+        title: "Error",
+        description: "Failed to undo transaction",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleDeleteTransaction = async (transactionId: string) => {
     try {
-      const response = await fetch(`/api/transactions/${transactionId}`, {
+      const response = await fetch(`/api/scheduled-transactions/${transactionId}`, {
         method: 'DELETE',
+        headers: {
+          'x-user-id': 'user-1'
+        }
       })
 
       if (response.ok) {
@@ -237,7 +298,12 @@ export default function TransactionsPage() {
           description: "Transaction deleted successfully",
         })
       } else {
-        throw new Error('Failed to delete transaction')
+        const data = await response.json()
+        toast({
+          title: "Error",
+          description: data.error || "Failed to delete transaction",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error('Error deleting transaction:', error)
@@ -249,62 +315,20 @@ export default function TransactionsPage() {
     }
   }
 
-  const reverseExecution = async (transactionId: string) => {
-    try {
-      const response = await fetch(`/api/transactions/${transactionId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          isExecuted: false,
-          executedDate: null
-        }),
-      })
-
-      if (response.ok) {
-        setTransactions(transactions.map(transaction => 
-          transaction.id === transactionId 
-            ? { ...transaction, isExecuted: false, executedDate: undefined }
-            : transaction
-        ))
-        toast({
-          title: "Success",
-          description: "Transaction execution reversed successfully",
-        })
-      } else {
-        const errorText = await response.text()
-        console.error('Failed to reverse execution:', errorText)
-        toast({
-          title: "Error",
-          description: "Failed to reverse execution",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error('Error reversing execution:', error)
-      toast({
-        title: "Error",
-        description: "Failed to reverse execution",
-        variant: "destructive",
-      })
-    }
-  }
-
   const exportTransactions = () => {
     const csvContent = [
       // CSV Header
       'Date,Type,Description,Amount,Currency,Status,Category,From Account,To Account',
       // CSV Data
       ...transactions.map(transaction => {
-        const date = transaction.executedDate || transaction.scheduledDate
+        const date = transaction.scheduledDate
         return [
           date ? format(date, 'yyyy-MM-dd') : '',
           transaction.type,
           `"${transaction.description}"`,
           transaction.amount,
           transaction.currency,
-          transaction.isExecuted ? 'Executed' : 'Scheduled',
+          getStatusText(transaction),
           `"${transaction.category || ''}"`,
           `"${transaction.fromAccount || ''}"`,
           `"${transaction.toAccount || ''}"`
@@ -356,7 +380,12 @@ export default function TransactionsPage() {
     try {
       // Delete each selected transaction
       const deletePromises = selectedTransactions.map(id =>
-        fetch(`/api/transactions/${id}`, { method: 'DELETE' })
+        fetch(`/api/scheduled-transactions/${id}`, { 
+          method: 'DELETE',
+          headers: {
+            'x-user-id': 'user-1'
+          }
+        })
       )
       
       await Promise.all(deletePromises)
@@ -367,6 +396,11 @@ export default function TransactionsPage() {
       setShowDeleteDialog(false)
     } catch (error) {
       console.error('Error deleting transactions:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete selected transactions",
+        variant: "destructive",
+      })
     }
   }
 
@@ -374,7 +408,12 @@ export default function TransactionsPage() {
     try {
       // Get all transaction IDs and delete them
       const deletePromises = transactions.map(transaction =>
-        fetch(`/api/transactions/${transaction.id}`, { method: 'DELETE' })
+        fetch(`/api/scheduled-transactions/${transaction.id}`, { 
+          method: 'DELETE',
+          headers: {
+            'x-user-id': 'user-1'
+          }
+        })
       )
       
       await Promise.all(deletePromises)
@@ -384,6 +423,11 @@ export default function TransactionsPage() {
       setShowClearAllDialog(false)
     } catch (error) {
       console.error('Error clearing all transactions:', error)
+      toast({
+        title: "Error",
+        description: "Failed to clear all transactions",
+        variant: "destructive",
+      })
     }
   }
 
@@ -396,7 +440,10 @@ export default function TransactionsPage() {
   }
 
   const getStatusText = (transaction: Transaction) => {
-    if (transaction.isExecuted) return "Executed"
+    if (transaction.isExecuted) {
+      return "Executed"
+    }
+    
     if (transaction.scheduledDate && transaction.scheduledDate < new Date()) {
       return "Overdue"
     }
@@ -412,15 +459,10 @@ export default function TransactionsPage() {
   }
 
   const totalScheduled = transactions
-    .filter(t => !t.isExecuted)
     .reduce((sum, t) => sum + t.amount, 0)
 
-  const executedThisMonth = transactions
-    .filter(t => t.isExecuted && t.executedDate && t.executedDate.getMonth() === new Date().getMonth())
-    .length
-
   const overdueTransactions = transactions
-    .filter(t => !t.isExecuted && t.scheduledDate && t.scheduledDate < new Date())
+    .filter(t => t.scheduledDate && t.scheduledDate < new Date())
     .length
 
   const recurringTransactions = transactions
@@ -502,12 +544,12 @@ export default function TransactionsPage() {
 
           <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Executed This Month</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
               <ArrowLeftRight className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-700">{executedThisMonth}</div>
-              <p className="text-xs text-green-600">Completed transactions</p>
+              <div className="text-2xl font-bold text-green-700">{transactions.length}</div>
+              <p className="text-xs text-green-600">All transactions</p>
             </CardContent>
           </Card>
 
@@ -617,65 +659,36 @@ export default function TransactionsPage() {
                           {getStatusText(transaction)}
                         </Badge>
 
-                        {!transaction.isExecuted && (
-                          <div className="flex space-x-2">
-                            <Button
-                              size="sm"
-                              onClick={() => executeTransaction(transaction.id)}
-                              disabled={transaction.isExecuted}
-                            >
-                              Execute Now
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent>
-                                <DropdownMenuItem onClick={() => handleEdit(transaction)}>
-                                  Edit
+                        <div className="flex space-x-2">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              {!transaction.isExecuted && (
+                                <DropdownMenuItem onClick={() => executeTransaction(transaction.id)}>
+                                  Execute Now
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => handleDeleteTransaction(transaction.id)}
-                                  className="text-destructive"
-                                >
-                                  Delete
+                              )}
+                              {transaction.isExecuted && (
+                                <DropdownMenuItem onClick={() => reverseExecution(transaction.id)}>
+                                  Undo Execution
                                 </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        )}
-                        
-                        {transaction.isExecuted && (
-                          <div className="flex space-x-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => reverseExecution(transaction.id)}
-                            >
-                              Undo Execution
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent>
-                                <DropdownMenuItem onClick={() => handleEdit(transaction)}>
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => handleDeleteTransaction(transaction.id)}
-                                  className="text-destructive"
-                                >
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        )}
+                              )}
+                              <DropdownMenuItem onClick={() => handleEdit(transaction)}>
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteTransaction(transaction.id)}
+                                className="text-destructive"
+                              >
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </motion.div>
                   )
@@ -751,6 +764,7 @@ export default function TransactionsPage() {
                       <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="LKR">LKR (Rs.)</SelectItem>
                       <SelectItem value="USD">USD</SelectItem>
                       <SelectItem value="EUR">EUR</SelectItem>
                       <SelectItem value="GBP">GBP</SelectItem>
@@ -848,7 +862,7 @@ export default function TransactionsPage() {
               </Button>
               <Button 
                 onClick={handleAddTransaction} 
-                disabled={!newTransaction.description || newTransaction.amount <= 0}
+                disabled={!newTransaction.description || !newTransaction.amount || parseFloat(newTransaction.amount) <= 0}
               >
                 Schedule Transaction
               </Button>
@@ -860,43 +874,118 @@ export default function TransactionsPage() {
         <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Edit Transaction</DialogTitle>
+              <DialogTitle>Edit Scheduled Transaction</DialogTitle>
             </DialogHeader>
             {selectedTransaction && (
-              <TransactionForm
-                onSubmit={async (updatedData) => {
-                  try {
-                    const response = await fetch(`/api/transactions/${selectedTransaction.id}`, {
-                      method: 'PUT',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify(updatedData),
-                    })
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Input
+                    id="description"
+                    value={selectedTransaction.description}
+                    onChange={(e) => setSelectedTransaction({...selectedTransaction, description: e.target.value})}
+                    placeholder="Transaction description"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="amount">Amount</Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    value={selectedTransaction.amount}
+                    onChange={(e) => setSelectedTransaction({...selectedTransaction, amount: parseFloat(e.target.value) || 0})}
+                    placeholder="0.00"
+                  />
+                </div>
 
-                    if (response.ok) {
-                      handleEditSuccess()
-                      toast({
-                        title: "Success",
-                        description: "Transaction updated successfully",
-                      })
-                    } else {
-                      throw new Error('Failed to update transaction')
-                    }
-                  } catch (error) {
-                    console.error('Error updating transaction:', error)
-                    toast({
-                      title: "Error",
-                      description: "Failed to update transaction",
-                      variant: "destructive",
-                    })
-                  }
-                }}
-                onCancel={() => setShowEditForm(false)}
-                initialData={selectedTransaction}
-                categories={[]} // Will need to add categories
-                standalone={false}
-              />
+                <div>
+                  <Label htmlFor="currency">Currency</Label>
+                  <Select 
+                    value={selectedTransaction.currency} 
+                    onValueChange={(value) => setSelectedTransaction({...selectedTransaction, currency: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LKR">LKR - Sri Lankan Rupee</SelectItem>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="frequency">Frequency</Label>
+                  <Select 
+                    value={selectedTransaction.frequency} 
+                    onValueChange={(value) => setSelectedTransaction({...selectedTransaction, frequency: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="once">Once</SelectItem>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="yearly">Yearly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`/api/scheduled-transactions/${selectedTransaction.id}`, {
+                          method: 'PUT',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'x-user-id': 'user-1'
+                          },
+                          body: JSON.stringify({
+                            description: selectedTransaction.description,
+                            amount: selectedTransaction.amount,
+                            currency: selectedTransaction.currency,
+                            frequency: selectedTransaction.frequency,
+                            scheduledDate: selectedTransaction.scheduledDate
+                          }),
+                        })
+
+                        if (response.ok) {
+                          handleEditSuccess()
+                          toast({
+                            title: "Success",
+                            description: "Transaction updated successfully",
+                          })
+                        } else {
+                          const data = await response.json()
+                          toast({
+                            title: "Error",
+                            description: data.error || "Failed to update transaction",
+                            variant: "destructive",
+                          })
+                        }
+                      } catch (error) {
+                        console.error('Error updating transaction:', error)
+                        toast({
+                          title: "Error",
+                          description: "Failed to update transaction",
+                          variant: "destructive",
+                        })
+                      }
+                    }}
+                    className="flex-1"
+                  >
+                    Update Transaction
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowEditForm(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
             )}
           </DialogContent>
         </Dialog>
