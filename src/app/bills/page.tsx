@@ -57,7 +57,7 @@ export default function BillsPage() {
   const [selectedDate, setSelectedDate] = useState<Date>()
   const [newBill, setNewBill] = useState({
     name: "",
-    amount: 0,
+    amount: "",
     currency: "LKR",
     dueDate: new Date(),
     frequency: "MONTHLY",
@@ -105,7 +105,7 @@ export default function BillsPage() {
     try {
       const billData = {
         name: newBill.name,
-        amount: newBill.amount,
+        amount: parseFloat(newBill.amount) || 0,
         currency: newBill.currency,
         dueDate: newBill.dueDate.toISOString(),
         frequency: newBill.frequency,
@@ -129,7 +129,7 @@ export default function BillsPage() {
         fetchBills()
         setNewBill({
           name: "",
-          amount: 0,
+          amount: "",
           currency: "LKR",
           dueDate: new Date(),
           frequency: "MONTHLY",
@@ -180,7 +180,7 @@ export default function BillsPage() {
     setSelectedBill(bill)
     setNewBill({
       name: bill.name,
-      amount: bill.amount,
+      amount: bill.amount.toString(),
       currency: bill.currency,
       dueDate: bill.dueDate,
       frequency: bill.frequency,
@@ -197,7 +197,7 @@ export default function BillsPage() {
     try {
       const billData = {
         name: newBill.name,
-        amount: newBill.amount,
+        amount: parseFloat(newBill.amount) || 0,
         currency: newBill.currency,
         dueDate: newBill.dueDate.toISOString(),
         frequency: newBill.frequency,
@@ -219,7 +219,7 @@ export default function BillsPage() {
         setSelectedBill(null)
         setNewBill({
           name: "",
-          amount: 0,
+          amount: "",
           currency: "LKR",
           dueDate: new Date(),
           frequency: "MONTHLY",
@@ -542,7 +542,7 @@ export default function BillsPage() {
                     type="number"
                     step="0.01"
                     value={newBill.amount}
-                    onChange={(e) => setNewBill({...newBill, amount: parseFloat(e.target.value) || 0})}
+                    onChange={(e) => setNewBill({...newBill, amount: e.target.value})}
                     placeholder="0.00"
                   />
                 </div>
@@ -643,7 +643,7 @@ export default function BillsPage() {
               <Button variant="outline" onClick={() => setShowAddForm(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleAddBill} disabled={!newBill.name || newBill.amount <= 0}>
+              <Button onClick={handleAddBill} disabled={!newBill.name || !newBill.amount || parseFloat(newBill.amount) <= 0}>
                 Add Bill
               </Button>
             </div>
@@ -675,7 +675,7 @@ export default function BillsPage() {
                     type="number"
                     step="0.01"
                     value={newBill.amount}
-                    onChange={(e) => setNewBill({...newBill, amount: parseFloat(e.target.value) || 0})}
+                    onChange={(e) => setNewBill({...newBill, amount: e.target.value})}
                     placeholder="0.00"
                   />
                 </div>

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await params
-    const { name, type, balance, currency, description, isActive } = await request.json()
+    const { id } = await context.params
+    const { name, type, balance, currency, description, isActive, icon } = await request.json()
 
     if (!name || !type) {
       return NextResponse.json(
@@ -35,6 +35,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         balance: parseFloat(balance),
         currency: currency || "USD",
         description: description || null,
+        icon: icon || "Wallet",
         isActive: isActive !== undefined ? isActive : true
       }
     })
@@ -53,9 +54,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await params
+    const { id } = await context.params
 
     // In a real app, you would get the user ID from the session and verify ownership
     const userId = request.headers.get("x-user-id") || "user-1"

@@ -25,7 +25,15 @@ import {
   Edit,
   Trash2,
   Eye,
-  EyeOff
+  EyeOff,
+  Landmark,
+  Building,
+  Car,
+  Home,
+  ShoppingBag,
+  Smartphone,
+  Coins,
+  DollarSign
 } from "lucide-react"
 
 interface Account {
@@ -35,6 +43,7 @@ interface Account {
   balance: number
   currency: string
   description?: string
+  icon?: string
   isActive: boolean
 }
 
@@ -49,10 +58,27 @@ export default function AccountsPage() {
   const [newAccount, setNewAccount] = useState({
     name: "",
     type: "BANK",
-    balance: 0,
+    balance: "",
     currency: "LKR",
-    description: ""
+    description: "",
+    icon: "Wallet"
   })
+
+  // Available icons for account selection
+  const availableIcons = [
+    { name: "Wallet", icon: Wallet, label: "Wallet" },
+    { name: "CreditCard", icon: CreditCard, label: "Credit Card" },
+    { name: "Banknote", icon: Banknote, label: "Cash" },
+    { name: "PiggyBank", icon: PiggyBank, label: "Savings" },
+    { name: "Landmark", icon: Landmark, label: "Bank" },
+    { name: "Building", icon: Building, label: "Business" },
+    { name: "Car", icon: Car, label: "Vehicle" },
+    { name: "Home", icon: Home, label: "Home" },
+    { name: "ShoppingBag", icon: ShoppingBag, label: "Shopping" },
+    { name: "Smartphone", icon: Smartphone, label: "Digital" },
+    { name: "Coins", icon: Coins, label: "Investment" },
+    { name: "DollarSign", icon: DollarSign, label: "Currency" }
+  ]
 
   useEffect(() => {
     fetchAccounts()
@@ -113,17 +139,14 @@ export default function AccountsPage() {
     }
   }
 
-  const getAccountIcon = (type: string) => {
-    switch (type) {
-      case "CASH":
-        return <Banknote className="h-6 w-6" />
-      case "SAVINGS":
-        return <PiggyBank className="h-6 w-6" />
-      case "CREDIT_CARD":
-        return <CreditCard className="h-6 w-6" />
-      default:
-        return <Wallet className="h-6 w-6" />
+  const getAccountIcon = (iconName?: string) => {
+    const iconData = availableIcons.find(icon => icon.name === iconName)
+    if (iconData) {
+      const IconComponent = iconData.icon
+      return <IconComponent className="h-6 w-6" />
     }
+    // Fallback to wallet icon
+    return <Wallet className="h-6 w-6" />
   }
 
   const getAccountTypeColor = (type: string) => {
@@ -141,12 +164,17 @@ export default function AccountsPage() {
 
   const addAccount = async () => {
     try {
+      const accountData = {
+        ...newAccount,
+        balance: parseFloat(newAccount.balance) || 0
+      }
+      
       const response = await fetch('/api/accounts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(newAccount)
+        body: JSON.stringify(accountData)
       })
 
       const data = await response.json()
@@ -157,9 +185,10 @@ export default function AccountsPage() {
         setNewAccount({
           name: "",
           type: "BANK",
-          balance: 0,
+          balance: "",
           currency: "LKR",
-          description: ""
+          description: "",
+          icon: "Wallet"
         })
         setShowAddForm(false)
       } else {
@@ -175,9 +204,10 @@ export default function AccountsPage() {
     setNewAccount({
       name: account.name,
       type: account.type,
-      balance: account.balance,
+      balance: account.balance.toString(),
       currency: account.currency,
-      description: account.description || ""
+      description: account.description || "",
+      icon: account.icon || "Wallet"
     })
     setShowEditForm(true)
   }
@@ -186,12 +216,17 @@ export default function AccountsPage() {
     if (!selectedAccount) return
     
     try {
+      const accountData = {
+        ...newAccount,
+        balance: parseFloat(newAccount.balance) || 0
+      }
+      
       const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(newAccount)
+        body: JSON.stringify(accountData)
       })
 
       const data = await response.json()
@@ -203,9 +238,10 @@ export default function AccountsPage() {
         setNewAccount({
           name: "",
           type: "BANK",
-          balance: 0,
+          balance: "",
           currency: "LKR",
-          description: ""
+          description: "",
+          icon: "Wallet"
         })
         setShowEditForm(false)
       } else {
@@ -358,7 +394,7 @@ export default function AccountsPage() {
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                   <div className="flex items-center space-x-3">
                     <div className={`p-2 rounded-lg ${getAccountTypeColor(account.type)}`}>
-                      {getAccountIcon(account.type)}
+                      {getAccountIcon(account.icon)}
                     </div>
                     <div>
                       <CardTitle className="text-lg">{account.name}</CardTitle>
@@ -429,6 +465,32 @@ export default function AccountsPage() {
                   onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
                 />
               </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="icon">Account Icon</Label>
+                <div className="grid grid-cols-6 gap-2">
+                  {availableIcons.map((iconOption) => {
+                    const IconComponent = iconOption.icon
+                    return (
+                      <button
+                        key={iconOption.name}
+                        type="button"
+                        onClick={() => setNewAccount({ ...newAccount, icon: iconOption.name })}
+                        className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-colors ${
+                          newAccount.icon === iconOption.name
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                        }`}
+                        title={iconOption.label}
+                      >
+                        <IconComponent className="h-5 w-5 mb-1" />
+                        <span className="text-xs">{iconOption.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="type">Account Type</Label>
                 <Select
@@ -454,7 +516,7 @@ export default function AccountsPage() {
                   step="0.01"
                   placeholder="0.00"
                   value={newAccount.balance}
-                  onChange={(e) => setNewAccount({ ...newAccount, balance: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
@@ -512,6 +574,32 @@ export default function AccountsPage() {
                   onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
                 />
               </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="edit-icon">Account Icon</Label>
+                <div className="grid grid-cols-6 gap-2">
+                  {availableIcons.map((iconOption) => {
+                    const IconComponent = iconOption.icon
+                    return (
+                      <button
+                        key={iconOption.name}
+                        type="button"
+                        onClick={() => setNewAccount({ ...newAccount, icon: iconOption.name })}
+                        className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-colors ${
+                          newAccount.icon === iconOption.name
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                        }`}
+                        title={iconOption.label}
+                      >
+                        <IconComponent className="h-5 w-5 mb-1" />
+                        <span className="text-xs">{iconOption.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="edit-type">Account Type</Label>
                 <Select
@@ -537,7 +625,7 @@ export default function AccountsPage() {
                   step="0.01"
                   placeholder="0.00"
                   value={newAccount.balance}
-                  onChange={(e) => setNewAccount({ ...newAccount, balance: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value })}
                 />
               </div>
               <div className="space-y-2">

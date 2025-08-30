@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, type, balance, currency, description } = await request.json()
+    const { name, type, balance, currency, description, icon } = await request.json()
 
     if (!name || !type) {
       return NextResponse.json(
@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
         balance: parseFloat(balance) || 0,
         currency: currency || "USD",
         description: description || null,
+        icon: icon || "Wallet",
         isActive: true,
         userId
       }

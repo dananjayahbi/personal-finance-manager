@@ -186,6 +186,7 @@ model Account {
   balance               Float    @default(0)
   currency              String   @default("LKR")
   description           String?
+  icon                  String?  @default("Wallet")
   isActive              Boolean  @default(true)
   userId                String
   createdAt             DateTime @default(now())

@@ -71,7 +71,7 @@ export default function TransactionsPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showClearAllDialog, setShowClearAllDialog] = useState(false)
   const [newTransaction, setNewTransaction] = useState({
-    amount: 0,
+    amount: "",
     currency: "LKR",
     description: "",
     fromAccount: "",
@@ -145,7 +145,7 @@ export default function TransactionsPage() {
     try {
       const transactionData = {
         description: newTransaction.description,
-        amount: newTransaction.amount,
+        amount: parseFloat(newTransaction.amount) || 0,
         currency: newTransaction.currency,
         type: transactionType,
         recurring: newTransaction.frequency !== "once",
@@ -167,7 +167,7 @@ export default function TransactionsPage() {
         // Refresh transactions list
         fetchTransactions()
         setNewTransaction({
-          amount: 0,
+          amount: "",
           currency: "LKR",
           description: "",
           fromAccount: "",
@@ -736,7 +736,7 @@ export default function TransactionsPage() {
                     type="number"
                     step="0.01"
                     value={newTransaction.amount}
-                    onChange={(e) => setNewTransaction({...newTransaction, amount: parseFloat(e.target.value) || 0})}
+                    onChange={(e) => setNewTransaction({...newTransaction, amount: e.target.value})}
                     placeholder="0.00"
                   />
                 </div>
