@@ -4,10 +4,34 @@ import { db } from "@/lib/db"
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const { name, amount, currency, dueDate, frequency, categoryId, accountId, description, isRecurring, isPaid } = await request.json()
+    const { name, amount, currency, dueDate, frequency, categoryId, categoryName, accountId, description, isRecurring, isPaid } = await request.json()
 
     // In a real app, you would get the user ID from the session
     const userId = request.headers.get("x-user-id") || "user-1"
+
+    // Handle category - either by ID or by name
+    let finalCategoryId: string | null = null
+    if (categoryId && categoryId !== "none") {
+      // If categoryId is provided and not "none", use it directly
+      finalCategoryId = categoryId
+    } else if (categoryName && categoryName !== "none") {
+      // If categoryName is provided, look up or create the category
+      let category = await db.category.findFirst({
+        where: { name: categoryName, userId }
+      })
+      
+      if (!category) {
+        // Create the category if it doesn't exist
+        category = await db.category.create({
+          data: {
+            name: categoryName,
+            type: "EXPENSE",
+            userId
+          }
+        })
+      }
+      finalCategoryId = category.id
+    }
 
     // Verify the bill belongs to the user
     const existingBill = await db.bill.findFirst({
@@ -103,7 +127,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         currency: currency || existingBill.currency,
         dueDate: dueDate ? new Date(dueDate) : existingBill.dueDate,
         frequency: frequency || existingBill.frequency,
-        categoryId: categoryId !== undefined ? categoryId : existingBill.categoryId,
+        categoryId: finalCategoryId !== undefined ? finalCategoryId : existingBill.categoryId,
         accountId: accountId !== undefined ? accountId : existingBill.accountId,
         description: description !== undefined ? description : existingBill.description,
         isRecurring: isRecurring !== undefined ? isRecurring : existingBill.isRecurring,

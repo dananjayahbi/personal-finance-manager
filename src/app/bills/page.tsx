@@ -26,6 +26,7 @@ import {
   XCircle,
   MoreHorizontal,
   Edit,
+  RotateCcw,
   Trash2,
   DollarSign,
   CalendarDays,
@@ -68,7 +69,7 @@ export default function BillsPage() {
     currency: "LKR",
     dueDate: new Date(),
     frequency: "MONTHLY",
-    category: "",
+    category: "none",
     description: "",
     isRecurring: true,
     account: ""
@@ -159,7 +160,7 @@ export default function BillsPage() {
         currency: newBill.currency,
         dueDate: newBill.dueDate.toISOString(),
         frequency: newBill.frequency,
-        categoryId: null, // For now, we'll set this to null
+        categoryName: newBill.category === "none" || !newBill.category ? null : newBill.category,
         accountId: newBill.account && newBill.account.trim() !== "" ? newBill.account : null,
         description: newBill.description,
         isRecurring: newBill.isRecurring
@@ -185,7 +186,7 @@ export default function BillsPage() {
           currency: "LKR",
           dueDate: new Date(),
           frequency: "MONTHLY",
-          category: "",
+          category: "none",
           description: "",
           isRecurring: true,
           account: ""
@@ -242,7 +243,7 @@ export default function BillsPage() {
       currency: bill.currency,
       dueDate: bill.dueDate,
       frequency: bill.frequency,
-      category: bill.category,
+      category: bill.category || "none",
       description: bill.description || "",
       isRecurring: bill.isRecurring,
       account: bill.accountId || ""
@@ -261,6 +262,7 @@ export default function BillsPage() {
         currency: newBill.currency,
         dueDate: newBill.dueDate.toISOString(),
         frequency: newBill.frequency,
+        categoryName: newBill.category === "none" || !newBill.category ? null : newBill.category,
         accountId: newBill.account && newBill.account.trim() !== "" ? newBill.account : null,
         description: newBill.description,
         isRecurring: newBill.isRecurring
@@ -285,7 +287,7 @@ export default function BillsPage() {
           currency: "LKR",
           dueDate: new Date(),
           frequency: "MONTHLY",
-          category: "",
+          category: "none",
           description: "",
           isRecurring: true,
           account: ""
@@ -540,10 +542,26 @@ export default function BillsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditBill(bill)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
+                            {bill.isPaid ? (
+                              <>
+                                <DropdownMenuItem 
+                                  onClick={() => toggleBillPaid(bill.id)}
+                                  className="text-orange-600 focus:text-orange-600"
+                                >
+                                  <RotateCcw className="mr-2 h-4 w-4" />
+                                  Undo Execution
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled className="opacity-50">
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit (Undo first)
+                                </DropdownMenuItem>
+                              </>
+                            ) : (
+                              <DropdownMenuItem onClick={() => handleEditBill(bill)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem 
                               onClick={() => handleDeleteBill(bill)}
                               className="text-red-600 focus:text-red-600"
@@ -706,6 +724,7 @@ export default function BillsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {/* Default categories */}
+                      <SelectItem value="none">No Category</SelectItem>
                       <SelectItem value="Utilities">Utilities</SelectItem>
                       <SelectItem value="Rent">Rent</SelectItem>
                       <SelectItem value="Insurance">Insurance</SelectItem>
@@ -884,6 +903,7 @@ export default function BillsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {/* Default categories */}
+                      <SelectItem value="none">No Category</SelectItem>
                       <SelectItem value="Utilities">Utilities</SelectItem>
                       <SelectItem value="Rent">Rent</SelectItem>
                       <SelectItem value="Insurance">Insurance</SelectItem>
