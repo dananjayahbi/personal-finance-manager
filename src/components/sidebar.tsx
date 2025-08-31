@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
-import { useCounts } from "@/hooks/use-counts"
+import { useNotificationContext } from "@/contexts/notification-context"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   LayoutDashboard,
@@ -35,7 +35,7 @@ interface SidebarProps {
 export default function Sidebar({ className }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const { user, logout } = useAuth()
-  const { counts, loading } = useCounts()
+  const { counts, loading } = useNotificationContext()
   
   const sidebarItems = [
     {

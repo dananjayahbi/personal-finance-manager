@@ -228,6 +228,7 @@ model Bill {
   category    Category? @relation(fields: [categoryId], references: [id])
   account     Account?  @relation(fields: [accountId], references: [id])
   transaction Transaction? @relation(fields: [transactionId], references: [id])
+  notifications Notification[] // Notifications related to this bill
 }
 
 model Activity {
@@ -247,14 +248,19 @@ model Notification {
   title       String
   message     String
   type        NotificationType
+  priority    NotificationPriority @default(MEDIUM)
   isRead      Boolean          @default(false)
   actionUrl   String?
+  billId      String?          // Reference to bill for bill-related notifications
+  scheduledTransactionId String? // Reference to scheduled transaction
   userId      String
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
   // Relationships
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bill        Bill?            @relation(fields: [billId], references: [id], onDelete: Cascade)
+  scheduledTransaction ScheduledTransaction? @relation(fields: [scheduledTransactionId], references: [id], onDelete: Cascade)
 }
 
 model ScheduledTransaction {
@@ -275,6 +281,7 @@ model ScheduledTransaction {
 
   // Relationships
   user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications   Notification[] // Notifications related to this scheduled transaction
 }
 
 // New enums
@@ -317,4 +324,10 @@ enum NotificationType {
   BUDGET_EXCEEDED
   LOW_BALANCE
   GENERAL
+}
+
+enum NotificationPriority {
+  HIGH
+  MEDIUM
+  LOW
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import DashboardLayout from "@/components/dashboard-layout"
+import { useNotificationContext } from "@/contexts/notification-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -43,48 +44,86 @@ import {
   Settings,
   Eye,
   MailOpen,
-  MailCheck
+  MailCheck,
+  RefreshCw,
+  Clock
 } from "lucide-react"
+
+interface RelatedItem {
+  id: string
+  name?: string
+  description?: string
+  amount: number
+  currency: string
+  dueDate?: string
+  scheduledDate?: string
+  isPaid?: boolean
+  isExecuted?: boolean
+  type?: string
+}
 
 interface Notification {
   id: string
   title: string
   message: string
   type: "BILL_DUE" | "SCHEDULED_TRANSACTION" | "GOAL_DEADLINE" | "BUDGET_EXCEEDED" | "LOW_BALANCE" | "GENERAL"
+  priority: "HIGH" | "MEDIUM" | "LOW"
   isRead: boolean
   actionUrl?: string
   createdAt: Date
-  priority: "high" | "medium" | "low"
+  isOverdue: boolean
+  relatedItem: RelatedItem | null
 }
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
-  const [filter, setFilter] = useState<"all" | "unread" | "high">("all")
+  const [filter, setFilter] = useState<"all" | "unread" | "bills" | "transactions" | "overdue">("all")
+  const [priorityFilter, setPriorityFilter] = useState<"all" | "HIGH" | "MEDIUM" | "LOW">("all")
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set())
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const { refreshCounts } = useNotificationContext()
 
   useEffect(() => {
     fetchNotifications()
-  }, [])
+  }, [filter, priorityFilter])
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch('/api/notifications')
+      const params = new URLSearchParams()
+      
+      if (filter === "unread") {
+        params.append("isRead", "false")
+      } else if (filter === "bills") {
+        params.append("category", "bills")
+      } else if (filter === "transactions") {
+        params.append("category", "transactions")
+      }
+      
+      if (priorityFilter !== "all") {
+        params.append("priority", priorityFilter)
+      }
+
+      const response = await fetch(`/api/notifications?${params.toString()}`)
       const data = await response.json()
       
       if (response.ok) {
-        // Convert API response to UI format
-        const notificationsWithUiProps = data.notifications.map((notification: any) => ({
+        // Convert API response to UI format and filter overdue if needed
+        let notificationsWithUiProps = data.notifications.map((notification: any) => ({
           ...notification,
-          createdAt: new Date(notification.createdAt),
-          priority: "medium" // Default priority since it's not in the database model
+          createdAt: new Date(notification.createdAt)
         }))
+
+        // Apply overdue filter
+        if (filter === "overdue") {
+          notificationsWithUiProps = notificationsWithUiProps.filter((n: Notification) => n.isOverdue)
+        }
+
         setNotifications(notificationsWithUiProps)
       } else {
         console.error('Failed to fetch notifications:', data.error)
-        // Fall back to empty array if needed
         setNotifications([])
       }
     } catch (error) {
@@ -93,7 +132,35 @@ export default function NotificationsPage() {
     }
   }
 
-  const getNotificationIcon = (type: string) => {
+  const generateNotifications = async () => {
+    setIsGenerating(true)
+    try {
+      const response = await fetch('/api/notifications/generate', {
+        method: 'POST'
+      })
+      const data = await response.json()
+      
+      if (response.ok) {
+        console.log('Notifications generated:', data.result)
+        // Refresh the notifications list
+        await fetchNotifications()
+        // Refresh the sidebar notification count
+        refreshCounts()
+      } else {
+        console.error('Failed to generate notifications:', data.error)
+      }
+    } catch (error) {
+      console.error('Error generating notifications:', error)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const getNotificationIcon = (type: string, isOverdue: boolean) => {
+    if (isOverdue) {
+      return <AlertTriangle className="h-5 w-5 text-red-600" />
+    }
+    
     switch (type) {
       case "BILL_DUE":
         return <CreditCard className="h-5 w-5 text-red-600" />
@@ -110,31 +177,30 @@ export default function NotificationsPage() {
     }
   }
 
-  const getNotificationBgColor = (type: string, isRead: boolean) => {
+  const getNotificationBgColor = (priority: string, isRead: boolean, isOverdue: boolean) => {
     if (isRead) return "bg-gray-50 border-gray-200"
     
-    switch (type) {
-      case "BILL_DUE":
-      case "LOW_BALANCE":
+    if (isOverdue) return "bg-red-50 border-red-300"
+    
+    switch (priority) {
+      case "HIGH":
         return "bg-red-50 border-red-200"
-      case "SCHEDULED_TRANSACTION":
+      case "MEDIUM":
+        return "bg-yellow-50 border-yellow-200"
+      case "LOW":
         return "bg-blue-50 border-blue-200"
-      case "GOAL_DEADLINE":
-        return "bg-purple-50 border-purple-200"
-      case "BUDGET_EXCEEDED":
-        return "bg-orange-50 border-orange-200"
       default:
-        return "bg-blue-50 border-blue-200"
+        return "bg-gray-50 border-gray-200"
     }
   }
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "high":
+      case "HIGH":
         return "bg-red-100 text-red-800 border-red-200"
-      case "medium":
+      case "MEDIUM":
         return "bg-yellow-100 text-yellow-800 border-yellow-200"
-      case "low":
+      case "LOW":
         return "bg-green-100 text-green-800 border-green-200"
       default:
         return "bg-gray-100 text-gray-800 border-gray-200"
@@ -162,6 +228,8 @@ export default function NotificationsPage() {
             ? { ...notification, isRead: true }
             : notification
         ))
+        // Refresh the sidebar notification count
+        refreshCounts()
       } else {
         console.error('Failed to mark notification as read:', data.error)
       }
@@ -191,6 +259,8 @@ export default function NotificationsPage() {
             ? { ...notification, isRead: false }
             : notification
         ))
+        // Refresh the sidebar notification count
+        refreshCounts()
       } else {
         console.error('Failed to mark notification as unread:', data.error)
       }
@@ -241,6 +311,8 @@ export default function NotificationsPage() {
         ...notification,
         isRead: true
       })))
+      // Refresh the sidebar notification count
+      refreshCounts()
     } catch (error) {
       console.error('Error marking all as read:', error)
     }
@@ -286,6 +358,8 @@ export default function NotificationsPage() {
           : notification
       ))
       setSelectedNotifications(new Set())
+      // Refresh the sidebar notification count
+      refreshCounts()
     } catch (error) {
       console.error('Error bulk marking as read:', error)
     }
@@ -342,19 +416,11 @@ export default function NotificationsPage() {
     setIsViewDialogOpen(true)
   }
 
-  const filteredNotifications = notifications.filter(notification => {
-    switch (filter) {
-      case "unread":
-        return !notification.isRead
-      case "high":
-        return notification.priority === "high"
-      default:
-        return true
-    }
-  })
+  const filteredNotifications = notifications // Filtering is now done in API, so we use all fetched notifications
 
   const unreadCount = notifications.filter(n => !n.isRead).length
-  const highPriorityCount = notifications.filter(n => n.priority === "high" && !n.isRead).length
+  const highPriorityCount = notifications.filter(n => n.priority === "HIGH" && !n.isRead).length
+  const overdueCount = notifications.filter(n => n.isOverdue && !n.isRead).length
 
   const getTimeAgo = (date: Date) => {
     const now = new Date()
@@ -385,6 +451,14 @@ export default function NotificationsPage() {
             </p>
           </div>
           <div className="flex space-x-2">
+            <Button 
+              onClick={generateNotifications} 
+              disabled={isGenerating}
+              variant="outline"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
+              Generate Notifications
+            </Button>
             <Button 
               variant="outline"
               onClick={() => setIsSettingsDialogOpen(true)}
@@ -473,10 +547,59 @@ export default function NotificationsPage() {
             Unread ({unreadCount})
           </Button>
           <Button
-            variant={filter === "high" ? "default" : "outline"}
-            onClick={() => setFilter("high")}
+            variant={filter === "bills" ? "default" : "outline"}
+            onClick={() => setFilter("bills")}
           >
-            High Priority ({highPriorityCount})
+            Bills
+          </Button>
+          <Button
+            variant={filter === "transactions" ? "default" : "outline"}
+            onClick={() => setFilter("transactions")}
+          >
+            Transactions
+          </Button>
+          <Button
+            variant={filter === "overdue" ? "default" : "outline"}
+            onClick={() => setFilter("overdue")}
+          >
+            Overdue ({overdueCount})
+          </Button>
+        </motion.div>
+
+        {/* Priority Filter */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-wrap gap-2 items-center"
+        >
+          <span className="text-sm font-medium text-gray-700">Priority:</span>
+          <Button
+            variant={priorityFilter === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setPriorityFilter("all")}
+          >
+            All
+          </Button>
+          <Button
+            variant={priorityFilter === "HIGH" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setPriorityFilter("HIGH")}
+          >
+            High ({highPriorityCount})
+          </Button>
+          <Button
+            variant={priorityFilter === "MEDIUM" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setPriorityFilter("MEDIUM")}
+          >
+            Medium
+          </Button>
+          <Button
+            variant={priorityFilter === "LOW" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setPriorityFilter("LOW")}
+          >
+            Low
           </Button>
         </motion.div>
 
@@ -553,7 +676,7 @@ export default function NotificationsPage() {
             >
               <Card 
                 className={`border-0 shadow-lg hover:shadow-xl transition-all duration-200 ${
-                  getNotificationBgColor(notification.type, notification.isRead)
+                  getNotificationBgColor(notification.priority, notification.isRead, notification.isOverdue)
                 }`}
               >
                 <CardContent className="p-6">
@@ -564,7 +687,7 @@ export default function NotificationsPage() {
                         onCheckedChange={(checked) => handleSelectNotification(notification.id, checked as boolean)}
                       />
                       <div className="flex-shrink-0">
-                        {getNotificationIcon(notification.type)}
+                        {getNotificationIcon(notification.type, notification.isOverdue)}
                       </div>
                       <div 
                         className="flex-1 min-w-0 cursor-pointer"
@@ -584,6 +707,27 @@ export default function NotificationsPage() {
                         <p className={`text-sm ${!notification.isRead ? 'text-gray-700' : 'text-gray-500'} mb-2`}>
                           {notification.message}
                         </p>
+                        {/* Related Item Information */}
+                        {notification.relatedItem && (
+                          <div className="mt-2 p-2 bg-gray-50 rounded-md">
+                            <div className="flex items-center justify-between text-xs">
+                              <div>
+                                <span className="font-medium">
+                                  {notification.relatedItem.name || notification.relatedItem.description}
+                                </span>
+                                <span className="ml-2 text-gray-500">
+                                  {notification.relatedItem.currency} {notification.relatedItem.amount.toFixed(2)}
+                                </span>
+                              </div>
+                              {notification.isOverdue && (
+                                <Badge variant="destructive" className="text-xs">
+                                  <Clock className="mr-1 h-3 w-3" />
+                                  Overdue
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-gray-500">
                             {getTimeAgo(notification.createdAt)}
@@ -697,7 +841,7 @@ export default function NotificationsPage() {
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center space-x-2">
-                {selectedNotification && getNotificationIcon(selectedNotification.type)}
+                {selectedNotification && getNotificationIcon(selectedNotification.type, selectedNotification.isOverdue)}
                 <span>Notification Details</span>
               </DialogTitle>
               <DialogDescription>

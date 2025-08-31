@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const isRead = searchParams.get("isRead")
     const type = searchParams.get("type")
+    const priority = searchParams.get("priority")
+    const category = searchParams.get("category") // "bills", "transactions", or "all"
     const limit = parseInt(searchParams.get("limit") || "50")
 
     const where: any = { userId }
@@ -21,14 +23,62 @@ export async function GET(request: NextRequest) {
       where.type = type
     }
 
+    if (priority) {
+      where.priority = priority
+    }
+
+    // Filter by category
+    if (category === "bills") {
+      where.type = "BILL_DUE"
+    } else if (category === "transactions") {
+      where.type = "SCHEDULED_TRANSACTION"
+    }
+
     const notifications = await db.notification.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      include: {
+        bill: {
+          select: {
+            id: true,
+            name: true,
+            amount: true,
+            currency: true,
+            dueDate: true,
+            isPaid: true
+          }
+        },
+        scheduledTransaction: {
+          select: {
+            id: true,
+            description: true,
+            amount: true,
+            currency: true,
+            scheduledDate: true,
+            isExecuted: true,
+            type: true
+          }
+        }
+      },
+      orderBy: [
+        { priority: "desc" }, // High priority first
+        { createdAt: "desc" }
+      ],
       take: limit
     })
 
+    // Add computed fields for frontend
+    const enhancedNotifications = notifications.map(notification => ({
+      ...notification,
+      isOverdue: notification.bill
+        ? notification.bill.dueDate < new Date() && !notification.bill.isPaid
+        : notification.scheduledTransaction
+        ? notification.scheduledTransaction.scheduledDate < new Date() && !notification.scheduledTransaction.isExecuted
+        : false,
+      relatedItem: notification.bill || notification.scheduledTransaction || null
+    }))
+
     return NextResponse.json({
-      notifications
+      notifications: enhancedNotifications
     })
 
   } catch (error) {
@@ -42,7 +92,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { title, message, type, actionUrl } = await request.json()
+    const { title, message, type, priority, actionUrl, billId, scheduledTransactionId } = await request.json()
 
     if (!title || !message || !type) {
       return NextResponse.json(
@@ -59,7 +109,10 @@ export async function POST(request: NextRequest) {
         title,
         message,
         type,
+        priority: priority || "MEDIUM",
         actionUrl: actionUrl || null,
+        billId: billId || null,
+        scheduledTransactionId: scheduledTransactionId || null,
         userId
       }
     })
