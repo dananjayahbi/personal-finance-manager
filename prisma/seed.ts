@@ -5,14 +5,14 @@ const prisma = new PrismaClient()
 async function main() {
   console.log('🌱 Seeding database...')
 
-  // Create a sample user first
+  // Create a sample user first - using the actual user ID from the app
   const user = await prisma.user.upsert({
-    where: { email: 'demo@example.com' },
+    where: { email: 'dananjayahbi@gmail.com' },
     update: {},
     create: {
-      id: 'user-1',
-      email: 'demo@example.com',
-      name: 'Demo User',
+      id: 'cmevcpadz0000smas5fta2pwk',
+      email: 'dananjayahbi@gmail.com',
+      name: 'dananjaya',
       passwordHash: '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj1VQp3Ap6Vu', // bcrypt hash for 'password'
       preferredCurrency: 'LKR',
     },
@@ -192,11 +192,64 @@ async function main() {
     update: {},
     create: {
       id: 'goal-3',
-      name: 'New Car Down Payment',
+      name: 'New Car Down Payment U',
       targetAmount: 15000,
-      currentAmount: 12000,
+      currentAmount: 13000,
       currency: 'LKR',
       deadline: new Date(2025, 9, 30), // October 30, 2025
+      userId: user.id,
+    },
+  })
+
+  // Create sample scheduled transactions
+  const salaryScheduled = await prisma.scheduledTransaction.upsert({
+    where: { id: 'scheduled-1' },
+    update: {},
+    create: {
+      id: 'scheduled-1',
+      amount: 150000,
+      currency: 'LKR',
+      description: 'Monthly Salary',
+      type: 'INCOME',
+      toAccountId: checkingAccount.id,
+      scheduledDate: new Date(2025, 9, 1), // October 1, 2025
+      frequency: 'monthly',
+      isExecuted: false,
+      userId: user.id,
+    },
+  })
+
+  const rentScheduled = await prisma.scheduledTransaction.upsert({
+    where: { id: 'scheduled-2' },
+    update: {},
+    create: {
+      id: 'scheduled-2',
+      amount: 384000,
+      currency: 'LKR',
+      description: 'Monthly Rent Payment',
+      type: 'EXPENSE',
+      fromAccountId: checkingAccount.id,
+      scheduledDate: new Date(2025, 9, 1), // October 1, 2025
+      frequency: 'monthly',
+      isExecuted: false,
+      userId: user.id,
+    },
+  })
+
+  const savingsTransfer = await prisma.scheduledTransaction.upsert({
+    where: { id: 'scheduled-3' },
+    update: {},
+    create: {
+      id: 'scheduled-3',
+      amount: 50000,
+      currency: 'LKR',
+      description: 'Weekly Savings Transfer',
+      type: 'TRANSFER',
+      fromAccountId: checkingAccount.id,
+      toAccountId: savingsAccount.id,
+      scheduledDate: new Date(2025, 8, 7), // September 7, 2025
+      frequency: 'weekly',
+      isExecuted: false,
       userId: user.id,
     },
   })
@@ -327,6 +380,9 @@ async function main() {
     creditAccount,
     electricBill,
     rentBill,
+    salaryScheduled,
+    rentScheduled,
+    savingsTransfer,
     billNotification,
     goalNotification,
     lowBalanceNotification,

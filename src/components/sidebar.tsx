@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
+import { useCounts } from "@/hooks/use-counts"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   LayoutDashboard,
@@ -15,7 +16,6 @@ import {
   TrendingUp,
   Settings,
   Bell,
-  Activity,
   ArrowLeftRight,
   Wallet,
   ChevronLeft,
@@ -32,72 +32,67 @@ interface SidebarProps {
   className?: string
 }
 
-const sidebarItems = [
-  {
-    title: "Dashboard",
-    href: "/",
-    icon: LayoutDashboard,
-    badge: null,
-  },
-  {
-    title: "Accounts",
-    href: "/accounts",
-    icon: Wallet,
-    badge: null,
-  },
-  {
-    title: "Transactions",
-    href: "/transactions",
-    icon: ArrowLeftRight,
-    badge: null,
-  },
-  {
-    title: "Expenses",
-    href: "/expenses",
-    icon: Receipt,
-    badge: null,
-  },
-  {
-    title: "Balances",
-    href: "/balances",
-    icon: PieChart,
-    badge: null,
-  },
-  {
-    title: "Bills",
-    href: "/bills",
-    icon: CreditCard,
-    badge: "3",
-  },
-  {
-    title: "Goals",
-    href: "/goals",
-    icon: Target,
-    badge: null,
-  },
-  {
-    title: "Activity",
-    href: "/activity",
-    icon: Activity,
-    badge: null,
-  },
-  {
-    title: "Notifications",
-    href: "/notifications",
-    icon: Bell,
-    badge: "5",
-  },
-  {
-    title: "Settings",
-    href: "/settings",
-    icon: Settings,
-    badge: null,
-  },
-]
-
 export default function Sidebar({ className }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const { user, logout } = useAuth()
+  const { counts, loading } = useCounts()
+  
+  const sidebarItems = [
+    {
+      title: "Dashboard",
+      href: "/",
+      icon: LayoutDashboard,
+      badge: null,
+    },
+    {
+      title: "Accounts",
+      href: "/accounts",
+      icon: Wallet,
+      badge: null,
+    },
+    {
+      title: "Transactions",
+      href: "/transactions",
+      icon: ArrowLeftRight,
+      badge: counts && counts.scheduledTransactionsCount > 0 ? counts.scheduledTransactionsCount.toString() : null,
+    },
+    {
+      title: "Expenses",
+      href: "/expenses",
+      icon: Receipt,
+      badge: null,
+    },
+    {
+      title: "Balances",
+      href: "/balances",
+      icon: PieChart,
+      badge: null,
+    },
+    {
+      title: "Bills",
+      href: "/bills",
+      icon: CreditCard,
+      badge: counts && counts.billsCount > 0 ? counts.billsCount.toString() : null,
+    },
+    {
+      title: "Goals",
+      href: "/goals",
+      icon: Target,
+      badge: null,
+    },
+    {
+      title: "Notifications",
+      href: "/notifications",
+      icon: Bell,
+      badge: counts && counts.notificationsCount > 0 ? counts.notificationsCount.toString() : null,
+    },
+    {
+      title: "Settings",
+      href: "/settings",
+      icon: Settings,
+      badge: null,
+    },
+  ]
   const pathname = usePathname()
 
   const toggleCollapsed = () => {

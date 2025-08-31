@@ -537,6 +537,144 @@ export default function TransactionsPage() {
     return diffDays
   }
 
+  // Bulk action helper functions
+  const getSelectedTransactionStates = () => {
+    const selectedTxns = transactions.filter(t => selectedTransactions.includes(t.id))
+    const executedCount = selectedTxns.filter(t => t.isExecuted).length
+    const nonExecutedCount = selectedTxns.filter(t => !t.isExecuted).length
+    
+    return {
+      total: selectedTxns.length,
+      executed: executedCount,
+      nonExecuted: nonExecutedCount,
+      isMixed: executedCount > 0 && nonExecutedCount > 0,
+      allExecuted: executedCount > 0 && nonExecutedCount === 0,
+      allNonExecuted: nonExecutedCount > 0 && executedCount === 0
+    }
+  }
+
+  const handleBulkExecute = async () => {
+    const selectedTxns = transactions.filter(t => selectedTransactions.includes(t.id) && !t.isExecuted)
+    
+    if (selectedTxns.length === 0) {
+      toast({
+        title: "No Transactions to Execute",
+        description: "Please select non-executed transactions to execute.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to execute ${selectedTxns.length} transaction${selectedTxns.length > 1 ? 's' : ''}? This will update your account balances.`
+    )
+    
+    if (!confirmed) return
+
+    try {
+      // Execute each selected transaction
+      const executePromises = selectedTxns.map(transaction =>
+        fetch(`/api/scheduled-transactions/${transaction.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': 'user-1'
+          },
+          body: JSON.stringify({ action: 'execute' })
+        })
+      )
+      
+      const results = await Promise.all(executePromises)
+      const failed = results.filter(r => !r.ok)
+      
+      if (failed.length === 0) {
+        toast({
+          title: "Success",
+          description: `Successfully executed ${selectedTxns.length} transaction${selectedTxns.length > 1 ? 's' : ''}`,
+        })
+      } else {
+        toast({
+          title: "Partial Success",
+          description: `Executed ${results.length - failed.length} of ${selectedTxns.length} transactions. ${failed.length} failed.`,
+          variant: "destructive",
+        })
+      }
+      
+      // Refresh data and clear selection
+      await fetchAccounts()
+      await fetchTransactions()
+      setSelectedTransactions([])
+    } catch (error) {
+      console.error('Error executing transactions:', error)
+      toast({
+        title: "Error",
+        description: "Failed to execute selected transactions",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleBulkUndo = async () => {
+    const selectedTxns = transactions.filter(t => selectedTransactions.includes(t.id) && t.isExecuted)
+    
+    if (selectedTxns.length === 0) {
+      toast({
+        title: "No Transactions to Undo",
+        description: "Please select executed transactions to undo.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to undo the execution of ${selectedTxns.length} transaction${selectedTxns.length > 1 ? 's' : ''}? This will reverse the account balance changes.`
+    )
+    
+    if (!confirmed) return
+
+    try {
+      // Undo each selected transaction
+      const undoPromises = selectedTxns.map(transaction =>
+        fetch(`/api/scheduled-transactions/${transaction.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': 'user-1'
+          },
+          body: JSON.stringify({ action: 'undo' })
+        })
+      )
+      
+      const results = await Promise.all(undoPromises)
+      const failed = results.filter(r => !r.ok)
+      
+      if (failed.length === 0) {
+        toast({
+          title: "Success",
+          description: `Successfully undone ${selectedTxns.length} transaction${selectedTxns.length > 1 ? 's' : ''}`,
+        })
+      } else {
+        toast({
+          title: "Partial Success",
+          description: `Undone ${results.length - failed.length} of ${selectedTxns.length} transactions. ${failed.length} failed.`,
+          variant: "destructive",
+        })
+      }
+      
+      // Refresh data and clear selection
+      await fetchAccounts()
+      await fetchTransactions()
+      setSelectedTransactions([])
+    } catch (error) {
+      console.error('Error undoing transactions:', error)
+      toast({
+        title: "Error",
+        description: "Failed to undo selected transactions",
+        variant: "destructive",
+      })
+    }
+  }
+
   const totalScheduled = transactions
     .reduce((sum, t) => sum + t.amount, 0)
 
@@ -575,6 +713,51 @@ export default function TransactionsPage() {
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
+            
+            {/* Smart bulk action buttons */}
+            {selectedTransactions.length > 1 && (() => {
+              const selectionState = getSelectedTransactionStates()
+              
+              if (selectionState.isMixed) {
+                // Mixed selection - show disabled button with message
+                return (
+                  <Button 
+                    variant="outline" 
+                    disabled
+                    className="text-muted-foreground"
+                  >
+                    Mixed Selection ({selectionState.total})
+                  </Button>
+                )
+              } else if (selectionState.allNonExecuted) {
+                // All selected are non-executed - show bulk execute
+                return (
+                  <Button 
+                    variant="default"
+                    onClick={handleBulkExecute}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    <ArrowDownLeft className="mr-2 h-4 w-4" />
+                    Execute Selected ({selectionState.total})
+                  </Button>
+                )
+              } else if (selectionState.allExecuted) {
+                // All selected are executed - show bulk undo
+                return (
+                  <Button 
+                    variant="outline"
+                    onClick={handleBulkUndo}
+                    className="text-amber-600 hover:text-amber-700 border-amber-300 hover:bg-amber-50"
+                  >
+                    <ArrowUpRight className="mr-2 h-4 w-4" />
+                    Undo Selected ({selectionState.total})
+                  </Button>
+                )
+              }
+              return null
+            })()}
+
+            {/* Regular delete selected button */}
             {selectedTransactions.length > 0 && (
               <Button 
                 variant="destructive" 
@@ -584,6 +767,7 @@ export default function TransactionsPage() {
                 Delete Selected ({selectedTransactions.length})
               </Button>
             )}
+            
             {transactions.length > 0 && (
               <Button 
                 variant="outline" 
@@ -600,6 +784,31 @@ export default function TransactionsPage() {
             </Button>
           </div>
         </motion.div>
+
+        {/* Mixed selection help message */}
+        {selectedTransactions.length > 1 && (() => {
+          const selectionState = getSelectedTransactionStates()
+          if (selectionState.isMixed) {
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center justify-center"
+              >
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800 text-sm">
+                  <div className="flex items-center space-x-2">
+                    <ArrowLeftRight className="h-4 w-4" />
+                    <span>
+                      You have selected both executed and non-executed transactions. 
+                      Please select only executed OR only non-executed transactions to use bulk actions.
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
+            )
+          }
+          return null
+        })()}
 
         {/* Summary Cards */}
         <motion.div
