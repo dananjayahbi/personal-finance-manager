@@ -3,20 +3,9 @@
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { motion } from "framer-motion"
-import TransactionForm from "@/components/transaction-form"
 import { formatCurrency } from "@/lib/currency"
-
-interface Category {
-  id: string
-  name: string
-  type: string
-  icon: string
-}
 
 interface MonthlyTrend {
   month: string
@@ -114,7 +103,6 @@ import {
   Wallet,
   ArrowUpRight,
   ArrowDownRight,
-  Plus,
   Calendar,
   Users
 } from "lucide-react"
@@ -127,13 +115,10 @@ const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'
 
 export default function DashboardContent({ className }: DashboardContentProps) {
   const { user } = useAuth()
-  const [showTransactionForm, setShowTransactionForm] = useState(false)
-  const [categories, setCategories] = useState<Category[]>([])
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchCategories()
     fetchDashboardData()
   }, [])
 
@@ -158,59 +143,6 @@ export default function DashboardContent({ className }: DashboardContentProps) {
       console.error('Error fetching dashboard data:', error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const fetchCategories = async () => {
-    try {
-      const response = await fetch('/api/categories')
-      const data = await response.json()
-      
-      if (response.ok) {
-        setCategories(data.categories)
-      } else {
-        console.error('Failed to fetch categories:', data.error)
-        // Fall back to mock data
-        setCategories([
-          { id: "income-category-1", name: "Salary", type: "INCOME", icon: "💼" },
-          { id: "expense-category-1", name: "Food & Dining", type: "EXPENSE", icon: "🍔" },
-          { id: "2", name: "Transportation", type: "EXPENSE", icon: "🚗" },
-          { id: "3", name: "Shopping", type: "EXPENSE", icon: "🛍️" },
-          { id: "4", name: "Entertainment", type: "EXPENSE", icon: "🎬" },
-          { id: "5", name: "Bills & Utilities", type: "EXPENSE", icon: "💡" },
-          { id: "6", name: "Healthcare", type: "EXPENSE", icon: "🏥" },
-          { id: "8", name: "Freelance", type: "INCOME", icon: "�" },
-          { id: "9", name: "Investment", type: "INCOME", icon: "�" }
-        ])
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error)
-    }
-  }
-  
-  const handleTransactionSubmit = async (transaction: any) => {
-    try {
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user?.id || 'user-1'
-        },
-        body: JSON.stringify(transaction),
-      })
-      
-      const data = await response.json()
-      
-      if (response.ok) {
-        console.log("Transaction created successfully:", data.transaction)
-        setShowTransactionForm(false)
-        // Refresh dashboard data
-        fetchDashboardData()
-      } else {
-        console.error('Failed to create transaction:', data.error)
-      }
-    } catch (error) {
-      console.error('Error creating transaction:', error)
     }
   }
 
@@ -256,15 +188,6 @@ export default function DashboardContent({ className }: DashboardContentProps) {
           <p className="text-muted-foreground">
             Here's your financial overview for today, {new Date().toLocaleDateString()}
           </p>
-        </div>
-        <div className="flex space-x-2">
-          <Button 
-            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-            onClick={() => setShowTransactionForm(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Transaction
-          </Button>
         </div>
       </motion.div>
 
@@ -590,23 +513,6 @@ export default function DashboardContent({ className }: DashboardContentProps) {
         </Card>
       </motion.div>
 
-      {/* Add Transaction Dialog */}
-      <Dialog open={showTransactionForm} onOpenChange={setShowTransactionForm}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add New Transaction</DialogTitle>
-            <DialogDescription>
-              Record a new income or expense transaction
-            </DialogDescription>
-          </DialogHeader>
-          <TransactionForm 
-            categories={categories}
-            onSubmit={handleTransactionSubmit}
-            onCancel={() => setShowTransactionForm(false)}
-            standalone={false}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
 import { motion } from "framer-motion"
 import {
   User,
@@ -76,6 +77,7 @@ interface Account {
 
 export default function SettingsPage() {
   const { toast } = useToast()
+  const { refreshUser } = useAuth()
   const [settings, setSettings] = useState<UserSettings>({
     firstName: "",
     lastName: "",
@@ -101,6 +103,12 @@ export default function SettingsPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  })
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
 
   useEffect(() => {
     fetchSettings()
@@ -215,6 +223,8 @@ export default function SettingsPage() {
           title: "Success",
           description: "Settings saved successfully!",
         })
+        // Refresh user data in auth context to update sidebar
+        await refreshUser()
       } else {
         console.error('Failed to save settings:', data.error)
         toast({
@@ -235,6 +245,92 @@ export default function SettingsPage() {
     }
   }
 
+  const updatePassword = async () => {
+    if (!passwordData.newPassword) {
+      toast({
+        title: "Error",
+        description: "Please enter a new password.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "New passwords do not match.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Check if current password is required
+    const isDemoUser = settings.email === "demo@example.com"
+    
+    if (!isDemoUser && !passwordData.currentPassword) {
+      toast({
+        title: "Error",
+        description: "Current password is required.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsUpdatingPassword(true)
+    try {
+      const response = await fetch('/api/settings/password', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          currentPassword: isDemoUser ? undefined : passwordData.currentPassword,
+          newPassword: passwordData.newPassword,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Password updated successfully!",
+        })
+        // Clear password fields
+        setPasswordData({
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: ""
+        })
+      } else {
+        console.error('Failed to update password:', data.error)
+        toast({
+          title: "Error",
+          description: data.error || "Failed to update password. Please try again.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error updating password:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update password. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUpdatingPassword(false)
+    }
+  }
+
   const exportData = async () => {
     try {
       // Simulate data export
@@ -247,6 +343,27 @@ export default function SettingsPage() {
       toast({
         title: "Error",
         description: "Failed to export data. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const clearLocalStorage = () => {
+    try {
+      // Clear all localStorage data
+      localStorage.clear()
+      toast({
+        title: "Success",
+        description: "Local storage cleared. The page will reload.",
+      })
+      // Reload the page to refresh the app state
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to clear local storage. Please try again.",
         variant: "destructive",
       })
     }
@@ -692,31 +809,50 @@ export default function SettingsPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="currentPassword">Current Password</Label>
-                      <div className="relative">
-                        <Input
-                          id="currentPassword"
-                          type={showPassword ? "text" : "password"}
-                          placeholder="Enter current password"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
+                    {settings.email !== "demo@example.com" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="currentPassword">Current Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="currentPassword"
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Enter current password"
+                            value={passwordData.currentPassword}
+                            onChange={(e) => setPasswordData(prev => ({
+                              ...prev,
+                              currentPassword: e.target.value
+                            }))}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
+                    )}
+                    {settings.email === "demo@example.com" && (
+                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-sm text-blue-800">
+                          <strong>Note:</strong> Since you're using the demo account, you don't need to enter your current password.
+                        </p>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <Label htmlFor="newPassword">New Password</Label>
                       <Input
                         id="newPassword"
                         type="password"
                         placeholder="Enter new password"
+                        value={passwordData.newPassword}
+                        onChange={(e) => setPasswordData(prev => ({
+                          ...prev,
+                          newPassword: e.target.value
+                        }))}
                       />
                     </div>
                     <div className="space-y-2">
@@ -725,10 +861,19 @@ export default function SettingsPage() {
                         id="confirmPassword"
                         type="password"
                         placeholder="Confirm new password"
+                        value={passwordData.confirmPassword}
+                        onChange={(e) => setPasswordData(prev => ({
+                          ...prev,
+                          confirmPassword: e.target.value
+                        }))}
                       />
                     </div>
-                    <Button className="w-full">
-                      Update Password
+                    <Button 
+                      className="w-full" 
+                      onClick={updatePassword}
+                      disabled={isUpdatingPassword}
+                    >
+                      {isUpdatingPassword ? "Updating..." : "Update Password"}
                     </Button>
                   </CardContent>
                 </Card>
@@ -813,6 +958,34 @@ export default function SettingsPage() {
                     <Button variant="outline" className="w-full">
                       <Upload className="mr-2 h-4 w-4" />
                       Import Data
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg border-orange-200">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2 text-orange-600">
+                      <RefreshCw className="h-5 w-5" />
+                      <span>Clear Local Storage</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Reset app data stored in your browser
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                      <p className="text-sm text-orange-800">
+                        <strong>Note:</strong> This will clear your browser's local storage including login state, 
+                        but won't affect your database data. You'll need to log in again.
+                      </p>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      className="w-full border-orange-200 text-orange-600 hover:bg-orange-50"
+                      onClick={clearLocalStorage}
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Clear Local Storage
                     </Button>
                   </CardContent>
                 </Card>
