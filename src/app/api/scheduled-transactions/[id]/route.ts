@@ -30,32 +30,80 @@ export async function PUT(
     // Check if this is an execution action
     if (requestData.action) {
       if (requestData.action === "execute") {
-        // Mark as executed and set execution date
-        const updatedTransaction = await db.scheduledTransaction.update({
-          where: { id },
-          data: {
-            isExecuted: true,
-            executedDate: new Date()
-          }
+        // Use a transaction to ensure both operations succeed or fail together
+        const result = await db.$transaction(async (tx) => {
+          // Mark as executed and set execution date
+          const updatedTransaction = await tx.scheduledTransaction.update({
+            where: { id },
+            data: {
+              isExecuted: true,
+              executedDate: new Date()
+            }
+          })
+
+          // Update account balances
+          await tx.account.update({
+            where: { id: scheduledTransaction.fromAccountId },
+            data: {
+              balance: {
+                decrement: scheduledTransaction.amount
+              }
+            }
+          })
+
+          await tx.account.update({
+            where: { id: scheduledTransaction.toAccountId },
+            data: {
+              balance: {
+                increment: scheduledTransaction.amount
+              }
+            }
+          })
+
+          return updatedTransaction
         })
 
         return NextResponse.json({
           message: "Transaction executed successfully",
-          scheduledTransaction: updatedTransaction
+          scheduledTransaction: result
         })
       } else if (requestData.action === "undo") {
-        // Mark as not executed and clear execution date
-        const updatedTransaction = await db.scheduledTransaction.update({
-          where: { id },
-          data: {
-            isExecuted: false,
-            executedDate: null
-          }
+        // Use a transaction to reverse both operations
+        const result = await db.$transaction(async (tx) => {
+          // Mark as not executed and clear execution date
+          const updatedTransaction = await tx.scheduledTransaction.update({
+            where: { id },
+            data: {
+              isExecuted: false,
+              executedDate: null
+            }
+          })
+
+          // Reverse account balance changes
+          await tx.account.update({
+            where: { id: scheduledTransaction.fromAccountId },
+            data: {
+              balance: {
+                increment: scheduledTransaction.amount
+              }
+            }
+          })
+
+          await tx.account.update({
+            where: { id: scheduledTransaction.toAccountId },
+            data: {
+              balance: {
+                decrement: scheduledTransaction.amount
+              }
+            }
+          })
+
+          return updatedTransaction
         })
 
         return NextResponse.json({
           message: "Transaction execution undone successfully",
-          scheduledTransaction: updatedTransaction
+          scheduledTransaction: result
         })
       } else {
         return NextResponse.json(

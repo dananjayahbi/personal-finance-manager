@@ -82,9 +82,19 @@ export default function TransactionsPage() {
   })
 
   useEffect(() => {
-    fetchTransactions()
-    fetchAccounts()
+    const loadData = async () => {
+      await fetchAccounts()
+      await fetchTransactions()
+    }
+    loadData()
   }, [])
+
+  // Refetch transactions when accounts data is available
+  useEffect(() => {
+    if (accounts.length > 0) {
+      fetchTransactions()
+    }
+  }, [accounts])
 
   const fetchAccounts = async () => {
     try {
@@ -116,21 +126,27 @@ export default function TransactionsPage() {
       
       if (response.ok) {
         // Convert API scheduled transactions to the format expected by the page
-        const convertedTransactions: Transaction[] = data.scheduledTransactions.map((tx: any) => ({
-          id: tx.id,
-          type: "TRANSFER" as const,
-          amount: tx.amount,
-          currency: tx.currency,
-          description: tx.description,
-          fromAccount: "", // We'll need to populate this from account data
-          toAccount: "", // We'll need to populate this from account data
-          scheduledDate: new Date(tx.scheduledDate),
-          executedDate: tx.executedDate ? new Date(tx.executedDate) : undefined,
-          frequency: tx.frequency || "once",
-          isScheduled: true,
-          isExecuted: tx.isExecuted,
-          category: ""
-        }))
+        const convertedTransactions: Transaction[] = data.scheduledTransactions.map((tx: any) => {
+          // Find account names from the accounts array
+          const fromAccount = accounts.find(acc => acc.id === tx.fromAccountId)
+          const toAccount = accounts.find(acc => acc.id === tx.toAccountId)
+          
+          return {
+            id: tx.id,
+            type: "TRANSFER" as const,
+            amount: tx.amount,
+            currency: tx.currency,
+            description: tx.description,
+            fromAccount: fromAccount?.name || "",
+            toAccount: toAccount?.name || "",
+            scheduledDate: new Date(tx.scheduledDate),
+            executedDate: tx.executedDate ? new Date(tx.executedDate) : undefined,
+            frequency: tx.frequency || "once",
+            isScheduled: true,
+            isExecuted: tx.isExecuted,
+            category: ""
+          }
+        })
         setTransactions(convertedTransactions)
       } else {
         console.error('Failed to fetch transactions:', data.error)
@@ -143,12 +159,25 @@ export default function TransactionsPage() {
 
   const handleAddTransaction = async () => {
     try {
+      // Find account IDs based on selected account names
+      const fromAccount = accounts.find(acc => acc.name === newTransaction.fromAccount)
+      const toAccount = accounts.find(acc => acc.name === newTransaction.toAccount)
+
+      if (!fromAccount || !toAccount) {
+        toast({
+          title: "Error",
+          description: "Please select both from and to accounts",
+          variant: "destructive",
+        })
+        return
+      }
+
       const transactionData = {
         description: newTransaction.description,
         amount: parseFloat(newTransaction.amount) || 0,
         currency: newTransaction.currency,
-        fromAccountId: "sample-from", // You'll need to map this from account selection
-        toAccountId: "sample-to", // You'll need to map this from account selection
+        fromAccountId: fromAccount.id,
+        toAccountId: toAccount.id,
         scheduledDate: newTransaction.scheduledDate.toISOString(),
         frequency: newTransaction.frequency
       }
@@ -228,7 +257,9 @@ export default function TransactionsPage() {
           title: "Success",
           description: "Transaction executed successfully",
         })
-        fetchTransactions()
+        // Refresh both accounts and transactions to show updated balances
+        await fetchAccounts()
+        await fetchTransactions()
       } else {
         const data = await response.json()
         toast({
@@ -263,7 +294,9 @@ export default function TransactionsPage() {
           title: "Success",
           description: "Transaction execution undone successfully",
         })
-        fetchTransactions()
+        // Refresh both accounts and transactions to show updated balances
+        await fetchAccounts()
+        await fetchTransactions()
       } else {
         const data = await response.json()
         toast({

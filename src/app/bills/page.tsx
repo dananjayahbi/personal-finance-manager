@@ -54,6 +54,8 @@ export default function BillsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isAddingBill, setIsAddingBill] = useState(false)
+  const [isUpdatingBill, setIsUpdatingBill] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>()
   const [newBill, setNewBill] = useState({
     name: "",
@@ -102,6 +104,7 @@ export default function BillsPage() {
   }
 
   const handleAddBill = async () => {
+    setIsAddingBill(true)
     try {
       const billData = {
         name: newBill.name,
@@ -140,9 +143,13 @@ export default function BillsPage() {
         setShowAddForm(false)
       } else {
         console.error('Failed to add bill:', data.error)
+        alert('Failed to add bill. Please try again.')
       }
     } catch (error) {
       console.error('Error adding bill:', error)
+      alert('Failed to add bill. Please try again.')
+    } finally {
+      setIsAddingBill(false)
     }
   }
 
@@ -194,6 +201,7 @@ export default function BillsPage() {
   const handleUpdateBill = async () => {
     if (!selectedBill) return
     
+    setIsUpdatingBill(true)
     try {
       const billData = {
         name: newBill.name,
@@ -236,6 +244,8 @@ export default function BillsPage() {
     } catch (error) {
       console.error("Error updating bill:", error)
       alert('Failed to update bill. Please try again.')
+    } finally {
+      setIsUpdatingBill(false)
     }
   }
 
@@ -557,9 +567,10 @@ export default function BillsPage() {
                       <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="GBP">GBP</SelectItem>
+                      <SelectItem value="LKR">LKR - Sri Lankan Rupee</SelectItem>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -640,11 +651,11 @@ export default function BillsPage() {
             </div>
             
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowAddForm(false)}>
+              <Button variant="outline" onClick={() => setShowAddForm(false)} disabled={isAddingBill}>
                 Cancel
               </Button>
-              <Button onClick={handleAddBill} disabled={!newBill.name || !newBill.amount || parseFloat(newBill.amount) <= 0}>
-                Add Bill
+              <Button onClick={handleAddBill} disabled={isAddingBill || !newBill.name || !newBill.amount || parseFloat(newBill.amount) <= 0}>
+                {isAddingBill ? "Adding..." : "Add Bill"}
               </Button>
             </div>
           </DialogContent>
@@ -690,10 +701,10 @@ export default function BillsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="GBP">GBP</SelectItem>
-                      <SelectItem value="LKR">LKR</SelectItem>
+                      <SelectItem value="LKR">LKR - Sri Lankan Rupee</SelectItem>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -777,11 +788,11 @@ export default function BillsPage() {
             </div>
             
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowEditForm(false)}>
+              <Button variant="outline" onClick={() => setShowEditForm(false)} disabled={isUpdatingBill}>
                 Cancel
               </Button>
-              <Button onClick={handleUpdateBill} disabled={!newBill.name || newBill.amount <= 0}>
-                Update Bill
+              <Button onClick={handleUpdateBill} disabled={isUpdatingBill || !newBill.name || !newBill.amount || parseFloat(newBill.amount) <= 0}>
+                {isUpdatingBill ? "Updating..." : "Update Bill"}
               </Button>
             </div>
           </DialogContent>

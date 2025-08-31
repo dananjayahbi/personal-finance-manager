@@ -54,10 +54,12 @@ interface Expense {
   recurring: boolean
   tags: string[]
   notes?: string
+  currency: string
 }
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [accounts, setAccounts] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState<"date" | "amount" | "category">("date")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
@@ -67,17 +69,21 @@ export default function ExpensesPage() {
   const [showEditForm, setShowEditForm] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isAddingExpense, setIsAddingExpense] = useState(false)
+  const [isUpdatingExpense, setIsUpdatingExpense] = useState(false)
   const [newExpense, setNewExpense] = useState({
     description: "",
     amount: "",
     category: "",
     account: "",
+    currency: "LKR",
     date: new Date().toISOString().split('T')[0],
     notes: ""
   })
 
   useEffect(() => {
     fetchExpenses()
+    fetchAccounts()
   }, [])
 
   const fetchExpenses = async () => {
@@ -95,7 +101,9 @@ export default function ExpensesPage() {
           amount: tx.amount,
           account: tx.fromAccount?.name || "Unknown",
           recurring: tx.recurring || false,
-          tags: [] // Default empty tags since it's not in the database model
+          tags: [], // Default empty tags since it's not in the database model
+          currency: tx.currency || "LKR",
+          notes: tx.notes || ""
         }))
         setExpenses(convertedExpenses)
       } else {
@@ -106,6 +114,23 @@ export default function ExpensesPage() {
     } catch (error) {
       console.error('Error fetching expenses:', error)
       setExpenses([])
+    }
+  }
+
+  const fetchAccounts = async () => {
+    try {
+      const response = await fetch('/api/accounts')
+      const data = await response.json()
+      
+      if (response.ok) {
+        setAccounts(data.accounts)
+      } else {
+        console.error('Failed to fetch accounts:', data.error)
+        setAccounts([])
+      }
+    } catch (error) {
+      console.error('Error fetching accounts:', error)
+      setAccounts([])
     }
   }
 
@@ -176,7 +201,8 @@ export default function ExpensesPage() {
       category: expense.category,
       account: expense.account,
       date: expense.date,
-      notes: expense.notes || ""
+      notes: expense.notes || "",
+      currency: expense.currency || "LKR"
     })
     setShowEditForm(true)
   }
@@ -196,7 +222,9 @@ export default function ExpensesPage() {
       })
       
       if (response.ok) {
-        setExpenses(expenses.filter(expense => expense.id !== selectedExpense.id))
+        // Refresh both expenses list and account balances
+        fetchExpenses()
+        fetchAccounts()
         setSelectedExpense(null)
         setShowDeleteModal(false)
       } else {
@@ -210,19 +238,29 @@ export default function ExpensesPage() {
   }
 
   const handleAddExpense = async () => {
-    if (!newExpense.description || !newExpense.amount || !newExpense.category) {
+    if (!newExpense.description || !newExpense.amount || !newExpense.category || !newExpense.account) {
       alert("Please fill in all required fields")
       return
     }
 
+    setIsAddingExpense(true)
     try {
+      // Find the account ID based on selected account name
+      const selectedAccount = accounts.find(acc => acc.name === newExpense.account)
+      if (!selectedAccount) {
+        alert("Please select a valid account")
+        setIsAddingExpense(false)
+        return
+      }
+
       const expenseData = {
         description: newExpense.description,
         amount: parseFloat(newExpense.amount),
         type: "EXPENSE",
-        currency: "LKR",
+        currency: newExpense.currency,
         date: new Date(newExpense.date).toISOString(),
         categoryId: "expense-category-1", // Default category for now
+        fromAccountId: selectedAccount.id, // For expenses, money comes from an account
         recurring: false
       }
 
@@ -235,15 +273,17 @@ export default function ExpensesPage() {
       })
 
       if (response.ok) {
-        // Refresh expenses list
+        // Refresh expenses list and account balances
         fetchExpenses()
+        fetchAccounts()
         setNewExpense({
           description: "",
           amount: "",
           category: "",
           account: "",
           date: new Date().toISOString().split('T')[0],
-          notes: ""
+          notes: "",
+          currency: "LKR"
         })
         setShowAddForm(false)
       } else {
@@ -254,23 +294,35 @@ export default function ExpensesPage() {
     } catch (error) {
       console.error("Error adding expense:", error)
       alert("Failed to add expense. Please try again.")
+    } finally {
+      setIsAddingExpense(false)
     }
   }
 
   const handleUpdateExpense = async () => {
-    if (!selectedExpense || !newExpense.description || !newExpense.amount || !newExpense.category) {
+    if (!selectedExpense || !newExpense.description || !newExpense.amount || !newExpense.category || !newExpense.account) {
       alert("Please fill in all required fields")
       return
     }
 
+    setIsUpdatingExpense(true)
     try {
+      // Find the account ID based on selected account name
+      const selectedAccount = accounts.find(acc => acc.name === newExpense.account)
+      if (!selectedAccount) {
+        alert("Please select a valid account")
+        setIsUpdatingExpense(false)
+        return
+      }
+
       const expenseData = {
         description: newExpense.description,
         amount: parseFloat(newExpense.amount),
         type: "EXPENSE",
-        currency: "LKR",
+        currency: newExpense.currency,
         date: new Date(newExpense.date).toISOString(),
         categoryId: "expense-category-1", // Default category for now
+        fromAccountId: selectedAccount.id, // For expenses, money comes from an account
         recurring: false
       }
 
@@ -283,15 +335,17 @@ export default function ExpensesPage() {
       })
 
       if (response.ok) {
-        // Refresh expenses list
+        // Refresh expenses list and account balances
         fetchExpenses()
+        fetchAccounts()
         setNewExpense({
           description: "",
           amount: "",
           category: "",
           account: "",
           date: new Date().toISOString().split('T')[0],
-          notes: ""
+          notes: "",
+          currency: "LKR"
         })
         setSelectedExpense(null)
         setShowEditForm(false)
@@ -303,6 +357,8 @@ export default function ExpensesPage() {
     } catch (error) {
       console.error("Error updating expense:", error)
       alert("Failed to update expense. Please try again.")
+    } finally {
+      setIsUpdatingExpense(false)
     }
   }
 
@@ -603,7 +659,7 @@ export default function ExpensesPage() {
 
         {/* Add Expense Dialog */}
         <Dialog open={showAddForm} onOpenChange={setShowAddForm}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>Add New Expense</DialogTitle>
             </DialogHeader>
@@ -619,9 +675,9 @@ export default function ExpensesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="amount">Amount (Rs.) *</Label>
+                  <Label htmlFor="amount">Amount *</Label>
                   <Input
                     id="amount"
                     type="number"
@@ -631,6 +687,21 @@ export default function ExpensesPage() {
                     onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
                     required
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="currency">Currency *</Label>
+                  <Select value={newExpense.currency} onValueChange={(value) => setNewExpense({ ...newExpense, currency: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LKR">LKR - Sri Lankan Rupee</SelectItem>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -660,10 +731,11 @@ export default function ExpensesPage() {
                       <SelectValue placeholder="Select account" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Main Checking">Main Checking</SelectItem>
-                      <SelectItem value="Savings Account">Savings Account</SelectItem>
-                      <SelectItem value="Cash Wallet">Cash Wallet</SelectItem>
-                      <SelectItem value="Credit Card">Credit Card</SelectItem>
+                      {accounts.map(account => (
+                        <SelectItem key={account.id} value={account.name}>
+                          {account.name} ({account.currency} {account.balance.toFixed(2)})
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -690,11 +762,11 @@ export default function ExpensesPage() {
               </div>
 
               <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setShowAddForm(false)}>
+                <Button variant="outline" onClick={() => setShowAddForm(false)} disabled={isAddingExpense}>
                   Cancel
                 </Button>
-                <Button onClick={handleAddExpense}>
-                  Add Expense
+                <Button onClick={handleAddExpense} disabled={isAddingExpense}>
+                  {isAddingExpense ? "Adding..." : "Add Expense"}
                 </Button>
               </div>
             </div>
@@ -703,7 +775,7 @@ export default function ExpensesPage() {
 
         {/* Edit Expense Dialog */}
         <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>Edit Expense</DialogTitle>
             </DialogHeader>
@@ -719,9 +791,9 @@ export default function ExpensesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-amount">Amount (Rs.) *</Label>
+                  <Label htmlFor="edit-amount">Amount *</Label>
                   <Input
                     id="edit-amount"
                     type="number"
@@ -731,6 +803,21 @@ export default function ExpensesPage() {
                     onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
                     required
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-currency">Currency *</Label>
+                  <Select value={newExpense.currency} onValueChange={(value) => setNewExpense({ ...newExpense, currency: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LKR">LKR - Sri Lankan Rupee</SelectItem>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -760,10 +847,11 @@ export default function ExpensesPage() {
                       <SelectValue placeholder="Select account" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Main Checking">Main Checking</SelectItem>
-                      <SelectItem value="Savings Account">Savings Account</SelectItem>
-                      <SelectItem value="Cash Wallet">Cash Wallet</SelectItem>
-                      <SelectItem value="Credit Card">Credit Card</SelectItem>
+                      {accounts.map(account => (
+                        <SelectItem key={account.id} value={account.name}>
+                          {account.name} ({account.currency} {account.balance.toFixed(2)})
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -799,13 +887,14 @@ export default function ExpensesPage() {
                     category: "",
                     account: "",
                     date: new Date().toISOString().split('T')[0],
-                    notes: ""
+                    notes: "",
+                    currency: "LKR"
                   })
-                }}>
+                }} disabled={isUpdatingExpense}>
                   Cancel
                 </Button>
-                <Button onClick={handleUpdateExpense}>
-                  Update Expense
+                <Button onClick={handleUpdateExpense} disabled={isUpdatingExpense}>
+                  {isUpdatingExpense ? "Updating..." : "Update Expense"}
                 </Button>
               </div>
             </div>
