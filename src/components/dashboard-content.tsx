@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { motion } from "framer-motion"
 import TransactionForm from "@/components/transaction-form"
+import { formatCurrency } from "@/lib/currency"
 
 interface Category {
   id: string
@@ -35,10 +36,55 @@ interface WeeklySpending {
   amount: number
 }
 
+interface GoalProgress {
+  id: string
+  name: string
+  targetAmount: number
+  currentAmount: number
+  progress: number
+  deadline: string | null
+  currency: string
+}
+
+interface RecentActivity {
+  id: string
+  type: string
+  description: string
+  amount: number
+  date: string
+  category: string
+  categoryIcon: string
+}
+
+interface UpcomingBill {
+  id: string
+  name: string
+  amount: number
+  dueDate: string
+  category: string
+  categoryIcon: string
+  account: string
+}
+
 interface DashboardData {
-  monthlyTrends: MonthlyTrend[]
-  expenseCategories: ExpenseCategory[]
-  weeklySpending: WeeklySpending[]
+  financialOverview: {
+    totalBalance: number
+    monthlyIncome: number
+    monthlyExpenses: number
+    netWorth: number
+    totalAccounts: number
+    activeGoals: number
+    upcomingBills: number
+  }
+  charts: {
+    monthlyTrends: MonthlyTrend[]
+    expenseCategories: ExpenseCategory[]
+    weeklySpending: WeeklySpending[]
+  }
+  goalsProgress: GoalProgress[]
+  recentActivity: RecentActivity[]
+  accountBreakdown: any[]
+  upcomingBills: UpcomingBill[]
 }
 
 import {
@@ -70,8 +116,7 @@ import {
   ArrowDownRight,
   Plus,
   Calendar,
-  Users,
-  Activity
+  Users
 } from "lucide-react"
 
 interface DashboardContentProps {
@@ -80,225 +125,40 @@ interface DashboardContentProps {
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4']
 
-const mockData = {
-  monthlyTrends: [
-    { month: 'Jan', income: 4200, expenses: 2800, savings: 1400 },
-    { month: 'Feb', income: 4500, expenses: 3200, savings: 1300 },
-    { month: 'Mar', income: 4800, expenses: 3100, savings: 1700 },
-    { month: 'Apr', income: 4600, expenses: 2900, savings: 1700 },
-    { month: 'May', income: 5200, expenses: 3400, savings: 1800 },
-    { month: 'Jun', income: 5500, expenses: 3600, savings: 1900 },
-  ],
-  expenseCategories: [
-    { name: 'Food & Dining', value: 1200, color: '#3B82F6' },
-    { name: 'Transportation', value: 800, color: '#10B981' },
-    { name: 'Shopping', value: 600, color: '#F59E0B' },
-    { name: 'Entertainment', value: 400, color: '#EF4444' },
-    { name: 'Bills & Utilities', value: 900, color: '#8B5CF6' },
-    { name: 'Healthcare', value: 300, color: '#06B6D4' },
-  ],
-  weeklySpending: [
-    { day: 'Mon', amount: 150 },
-    { day: 'Tue', amount: 230 },
-    { day: 'Wed', amount: 180 },
-    { day: 'Thu', amount: 290 },
-    { day: 'Fri', amount: 340 },
-    { day: 'Sat', amount: 420 },
-    { day: 'Sun', amount: 280 },
-  ],
-}
-
 export default function DashboardContent({ className }: DashboardContentProps) {
   const { user } = useAuth()
   const [showTransactionForm, setShowTransactionForm] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
-  const [financialOverview, setFinancialOverview] = useState({
-    totalBalance: 0,
-    monthlyIncome: 0,
-    monthlyExpenses: 0,
-    netWorth: 0,
-    totalAccounts: 0,
-    activeGoals: 0,
-    upcomingBills: 0
-  })
-  const [dashboardData, setDashboardData] = useState<DashboardData>({
-    monthlyTrends: [],
-    expenseCategories: [],
-    weeklySpending: []
-  })
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetchCategories()
-    fetchFinancialOverview()
     fetchDashboardData()
   }, [])
 
-  const fetchFinancialOverview = async () => {
-    try {
-      // Fetch accounts for total balance
-      const accountsResponse = await fetch('/api/accounts')
-      const accountsData = await accountsResponse.json()
-      
-      // Fetch transactions for income/expenses 
-      const transactionsResponse = await fetch('/api/transactions')
-      const transactionsData = await transactionsResponse.json()
-      
-      // Fetch goals count
-      const goalsResponse = await fetch('/api/goals')
-      const goalsData = await goalsResponse.json()
-      
-      // Fetch bills count
-      const billsResponse = await fetch('/api/bills')
-      const billsResult = await billsResponse.json()
-      
-      if (accountsResponse.ok && transactionsResponse.ok && goalsResponse.ok && billsResponse.ok) {
-        const accounts = accountsData.accounts || []
-        const transactions = transactionsData.transactions || []
-        const goals = goalsData.goals || []
-        const bills = billsResult.bills || []
-        
-        // Calculate totals
-        const totalBalance = accounts.reduce((sum: number, account: any) => sum + account.balance, 0)
-        const assets = accounts.filter((a: any) => a.balance > 0).reduce((sum: number, account: any) => sum + account.balance, 0)
-        const liabilities = Math.abs(accounts.filter((a: any) => a.balance < 0).reduce((sum: number, account: any) => sum + account.balance, 0))
-        
-        // Calculate monthly income/expenses (last 30 days)
-        const thirtyDaysAgo = new Date()
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-        
-        const recentTransactions = transactions.filter((t: any) => new Date(t.date) >= thirtyDaysAgo)
-        const monthlyIncome = recentTransactions
-          .filter((t: any) => t.type === 'INCOME')
-          .reduce((sum: number, t: any) => sum + t.amount, 0)
-        const monthlyExpenses = Math.abs(recentTransactions
-          .filter((t: any) => t.type === 'EXPENSE')
-          .reduce((sum: number, t: any) => sum + t.amount, 0))
-        
-        const upcomingBills = bills.filter((b: any) => !b.isPaid).length
-        
-        setFinancialOverview({
-          totalBalance,
-          monthlyIncome,
-          monthlyExpenses,
-          netWorth: assets - liabilities,
-          totalAccounts: accounts.length,
-          activeGoals: goals.length,
-          upcomingBills
-        })
-      }
-    } catch (error) {
-      console.error('Error fetching financial overview:', error)
-    }
-  }
-
   const fetchDashboardData = async () => {
     try {
-      const transactionsResponse = await fetch('/api/transactions')
-      const transactionsData = await transactionsResponse.json()
+      setLoading(true)
+      const userId = user?.id || 'user-1'
       
-      if (transactionsResponse.ok) {
-        const transactions = transactionsData.transactions || []
-        
-        // Generate monthly trends (last 6 months)
-        const monthlyTrends = generateMonthlyTrends(transactions)
-        
-        // Generate expense categories
-        const expenseCategories = generateExpenseCategories(transactions)
-        
-        // Generate weekly spending (last 7 days)
-        const weeklySpending = generateWeeklySpending(transactions)
-        
-        setDashboardData({
-          monthlyTrends,
-          expenseCategories,
-          weeklySpending
-        })
+      const response = await fetch('/api/dashboard', {
+        headers: {
+          'x-user-id': userId
+        }
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        setDashboardData(result.data)
+      } else {
+        console.error('Failed to fetch dashboard data')
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
-      // Keep mock data as fallback
-      setDashboardData({
-        monthlyTrends: mockData.monthlyTrends,
-        expenseCategories: mockData.expenseCategories,
-        weeklySpending: mockData.weeklySpending
-      })
+    } finally {
+      setLoading(false)
     }
-  }
-
-  const generateMonthlyTrends = (transactions: any[]): MonthlyTrend[] => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    const last6Months: MonthlyTrend[] = []
-    
-    for (let i = 5; i >= 0; i--) {
-      const date = new Date()
-      date.setMonth(date.getMonth() - i)
-      const monthIndex = date.getMonth()
-      const year = date.getFullYear()
-      
-      const monthTransactions = transactions.filter(t => {
-        const tDate = new Date(t.date)
-        return tDate.getMonth() === monthIndex && tDate.getFullYear() === year
-      })
-      
-      const income = monthTransactions
-        .filter(t => t.type === 'INCOME')
-        .reduce((sum, t) => sum + t.amount, 0)
-      const expenses = Math.abs(monthTransactions
-        .filter(t => t.type === 'EXPENSE')
-        .reduce((sum, t) => sum + t.amount, 0))
-      
-      last6Months.push({
-        month: months[monthIndex],
-        income,
-        expenses,
-        savings: income - expenses
-      })
-    }
-    
-    return last6Months
-  }
-
-  const generateExpenseCategories = (transactions: any[]): ExpenseCategory[] => {
-    const expenseTransactions = transactions.filter(t => t.type === 'EXPENSE')
-    const categoryTotals: { [key: string]: number } = {}
-    
-    expenseTransactions.forEach(t => {
-      const categoryName = t.category?.name || 'Other'
-      categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + Math.abs(t.amount)
-    })
-    
-    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4']
-    return Object.entries(categoryTotals)
-      .map(([name, value], index) => ({
-        name,
-        value,
-        color: colors[index % colors.length]
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6) // Top 6 categories
-  }
-
-  const generateWeeklySpending = (transactions: any[]): WeeklySpending[] => {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    const last7Days: WeeklySpending[] = []
-    
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date()
-      date.setDate(date.getDate() - i)
-      const dayTransactions = transactions.filter(t => {
-        const tDate = new Date(t.date)
-        return tDate.toDateString() === date.toDateString() && t.type === 'EXPENSE'
-      })
-      
-      const amount = Math.abs(dayTransactions.reduce((sum, t) => sum + t.amount, 0))
-      
-      last7Days.push({
-        day: days[date.getDay() === 0 ? 6 : date.getDay() - 1], // Adjust for Monday start
-        amount
-      })
-    }
-    
-    return last7Days
   }
 
   const fetchCategories = async () => {
@@ -334,6 +194,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-user-id': user?.id || 'user-1'
         },
         body: JSON.stringify(transaction),
       })
@@ -343,8 +204,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
       if (response.ok) {
         console.log("Transaction created successfully:", data.transaction)
         setShowTransactionForm(false)
-        // Refresh financial data
-        fetchFinancialOverview()
+        // Refresh dashboard data
         fetchDashboardData()
       } else {
         console.error('Failed to create transaction:', data.error)
@@ -367,6 +227,17 @@ export default function DashboardContent({ className }: DashboardContentProps) {
         staggerChildren: 0.1
       }
     }
+  }
+
+  if (loading || !dashboardData) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading dashboard...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -412,7 +283,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-700">
-                ${financialOverview.totalBalance.toLocaleString()}
+                {formatCurrency(dashboardData.financialOverview.totalBalance, 'LKR')}
               </div>
               <div className="flex items-center space-x-2 text-xs text-green-600">
                 <ArrowUpRight className="h-3 w-3" />
@@ -430,7 +301,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-700">
-                ${financialOverview.monthlyIncome.toLocaleString()}
+                {formatCurrency(dashboardData.financialOverview.monthlyIncome, 'LKR')}
               </div>
               <div className="flex items-center space-x-2 text-xs text-green-600">
                 <ArrowUpRight className="h-3 w-3" />
@@ -448,7 +319,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-700">
-                ${financialOverview.monthlyExpenses.toLocaleString()}
+                {formatCurrency(dashboardData.financialOverview.monthlyExpenses, 'LKR')}
               </div>
               <div className="flex items-center space-x-2 text-xs text-red-600">
                 <ArrowUpRight className="h-3 w-3" />
@@ -466,7 +337,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-purple-700">
-                ${financialOverview.netWorth.toLocaleString()}
+                {formatCurrency(dashboardData.financialOverview.netWorth, 'LKR')}
               </div>
               <div className="flex items-center space-x-2 text-xs text-green-600">
                 <ArrowUpRight className="h-3 w-3" />
@@ -491,8 +362,8 @@ export default function DashboardContent({ className }: DashboardContentProps) {
               <CreditCard className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{financialOverview.totalAccounts}</div>
-              <p className="text-xs text-muted-foreground">2 primary, 2 savings</p>
+              <div className="text-2xl font-bold">{dashboardData.financialOverview.totalAccounts}</div>
+              <p className="text-xs text-muted-foreground">Active accounts</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -504,8 +375,8 @@ export default function DashboardContent({ className }: DashboardContentProps) {
               <Target className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{financialOverview.activeGoals}</div>
-              <p className="text-xs text-muted-foreground">1 near completion</p>
+              <div className="text-2xl font-bold">{dashboardData.financialOverview.activeGoals}</div>
+              <p className="text-xs text-muted-foreground">Goals in progress</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -517,8 +388,8 @@ export default function DashboardContent({ className }: DashboardContentProps) {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{financialOverview.upcomingBills}</div>
-              <p className="text-xs text-muted-foreground">3 due this week</p>
+              <div className="text-2xl font-bold">{dashboardData.financialOverview.upcomingBills}</div>
+              <p className="text-xs text-muted-foreground">Bills pending</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -540,7 +411,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={dashboardData.monthlyTrends}>
+                <AreaChart data={dashboardData.charts.monthlyTrends}>
                   <defs>
                     <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
@@ -589,7 +460,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={dashboardData.expenseCategories}
+                    data={dashboardData.charts.expenseCategories}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
@@ -598,7 +469,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
                     fill="#8884d8"
                     dataKey="value"
                   >
-                    {dashboardData.expenseCategories.map((entry, index) => (
+                    {dashboardData.charts.expenseCategories.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -618,7 +489,7 @@ export default function DashboardContent({ className }: DashboardContentProps) {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={dashboardData.weeklySpending}>
+                <BarChart data={dashboardData.charts.weeklySpending}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="day" />
                   <YAxis />
@@ -634,37 +505,39 @@ export default function DashboardContent({ className }: DashboardContentProps) {
         <motion.div variants={cardVariants}>
           <Card className="border-0 shadow-lg">
             <CardHeader>
-              <CardTitle>Savings Goals Progress</CardTitle>
+              <CardTitle>Goals Progress</CardTitle>
               <CardDescription>Track your financial goals</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Emergency Fund</span>
-                  <span className="text-sm text-muted-foreground">$8,500 / $10,000</span>
+              {dashboardData.goalsProgress.length > 0 ? (
+                dashboardData.goalsProgress.slice(0, 3).map((goal) => (
+                  <div key={goal.id} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{goal.name}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {formatCurrency(goal.currentAmount, goal.currency)} / {formatCurrency(goal.targetAmount, goal.currency)}
+                      </span>
+                    </div>
+                    <Progress value={Math.min(goal.progress, 100)} className="h-2" />
+                    {goal.deadline && (
+                      <p className="text-xs text-muted-foreground">
+                        Due: {new Date(goal.deadline).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground">No goals set yet</p>
+                  <p className="text-xs text-muted-foreground">Create your first financial goal to track progress</p>
                 </div>
-                <Progress value={85} className="h-2" />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Vacation Fund</span>
-                  <span className="text-sm text-muted-foreground">$2,100 / $5,000</span>
-                </div>
-                <Progress value={42} className="h-2" />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Car Down Payment</span>
-                  <span className="text-sm text-muted-foreground">$12,000 / $15,000</span>
-                </div>
-                <Progress value={80} className="h-2" />
-              </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
       </motion.div>
 
-      {/* Recent Activity */}
+      {/* Upcoming Bills */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -673,43 +546,45 @@ export default function DashboardContent({ className }: DashboardContentProps) {
         <Card className="border-0 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Activity className="mr-2 h-5 w-5" />
-              Recent Activity
+              <Calendar className="mr-2 h-5 w-5" />
+              Upcoming Bills
             </CardTitle>
-            <CardDescription>Your latest financial activities</CardDescription>
+            <CardDescription>Bills due soon</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {[
-                { type: 'expense', description: 'Grocery shopping at Whole Foods', amount: -125.50, time: '2 hours ago' },
-                { type: 'income', description: 'Salary deposit from TechCorp', amount: 4500.00, time: '1 day ago' },
-                { type: 'transfer', description: 'Transfer to Savings Account', amount: -500.00, time: '2 days ago' },
-                { type: 'expense', description: 'Netflix subscription', amount: -15.99, time: '3 days ago' },
-              ].map((activity, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.7 + index * 0.1 }}
-                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className={`h-2 w-2 rounded-full ${
-                      activity.type === 'income' ? 'bg-green-500' :
-                      activity.type === 'expense' ? 'bg-red-500' : 'bg-blue-500'
-                    }`} />
-                    <div>
-                      <p className="text-sm font-medium">{activity.description}</p>
-                      <p className="text-xs text-muted-foreground">{activity.time}</p>
+              {dashboardData.upcomingBills.length > 0 ? (
+                dashboardData.upcomingBills.map((bill, index) => (
+                  <motion.div
+                    key={bill.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: 0.7 + index * 0.1 }}
+                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="text-lg">{bill.categoryIcon}</div>
+                      <div>
+                        <p className="text-sm font-medium">{bill.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Due: {new Date(bill.dueDate).toLocaleDateString()}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Account: {bill.account}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className={`text-sm font-medium ${
-                    activity.amount > 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {activity.amount > 0 ? '+' : ''}${Math.abs(activity.amount).toFixed(2)}
-                  </div>
-                </motion.div>
-              ))}
+                    <div className="text-sm font-medium text-red-600">
+                      {formatCurrency(bill.amount, 'LKR')}
+                    </div>
+                  </motion.div>
+                ))
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground">No upcoming bills</p>
+                  <p className="text-xs text-muted-foreground">All bills are up to date</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

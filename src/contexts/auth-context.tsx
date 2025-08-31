@@ -38,9 +38,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (savedUser) {
         const userData = JSON.parse(savedUser)
         setUser(userData)
+      } else {
+        // If no user is logged in, automatically log in with demo user
+        const demoUser = {
+          id: "user-1",
+          email: "demo@example.com",
+          name: "Demo User",
+          preferredCurrency: "LKR",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+        setUser(demoUser)
+        localStorage.setItem("finance-app-user", JSON.stringify(demoUser))
       }
     } catch (error) {
       console.error("Auth status check failed:", error)
+      // Fallback to demo user
+      const demoUser = {
+        id: "user-1",
+        email: "demo@example.com",
+        name: "Demo User",
+        preferredCurrency: "LKR",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+      setUser(demoUser)
+      localStorage.setItem("finance-app-user", JSON.stringify(demoUser))
     } finally {
       setIsLoading(false)
     }
