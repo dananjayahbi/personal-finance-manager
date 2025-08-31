@@ -56,6 +56,22 @@ interface UserSettings {
   goalReminders: boolean
   lowBalanceAlerts: boolean
   budgetAlerts: boolean
+  goalsAccountId: string | null
+  goalsAccount?: {
+    id: string
+    name: string
+    type: string
+    balance: number
+    currency: string
+  } | null
+}
+
+interface Account {
+  id: string
+  name: string
+  type: string
+  balance: number
+  currency: string
 }
 
 export default function SettingsPage() {
@@ -77,15 +93,36 @@ export default function SettingsPage() {
     billReminders: true,
     goalReminders: true,
     lowBalanceAlerts: true,
-    budgetAlerts: true
+    budgetAlerts: true,
+    goalsAccountId: null,
+    goalsAccount: null
   })
 
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
     fetchSettings()
+    fetchAccounts()
   }, [])
+
+  const fetchAccounts = async () => {
+    try {
+      const response = await fetch('/api/accounts')
+      const data = await response.json()
+      
+      if (response.ok) {
+        setAccounts(data.accounts)
+      } else {
+        console.error('Failed to fetch accounts:', data.error)
+        setAccounts([])
+      }
+    } catch (error) {
+      console.error('Error fetching accounts:', error)
+      setAccounts([])
+    }
+  }
 
   const fetchSettings = async () => {
     try {
@@ -234,7 +271,9 @@ export default function SettingsPage() {
         billReminders: true,
         goalReminders: true,
         lowBalanceAlerts: true,
-        budgetAlerts: true
+        budgetAlerts: true,
+        goalsAccountId: null,
+        goalsAccount: null
       }
       
       setSettings(defaultSettings)
@@ -445,6 +484,28 @@ export default function SettingsPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Goals Account</Label>
+                      <Select
+                        value={settings.goalsAccountId || "none"}
+                        onValueChange={(value) => updateSetting("goalsAccountId", value === "none" ? null : value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select an account for goals management" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No Goals Account</SelectItem>
+                          {accounts.map((account) => (
+                            <SelectItem key={account.id} value={account.id}>
+                              {account.name} ({account.type})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-sm text-muted-foreground">
+                        Choose an account to manage your savings goals. This account will be used for all goal transactions.
+                      </p>
                     </div>
                   </CardContent>
                 </Card>

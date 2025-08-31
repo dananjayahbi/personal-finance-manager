@@ -8,6 +8,9 @@ export async function GET(request: NextRequest) {
 
     let userSettings = await db.userSettings.findUnique({
       where: { userId },
+      include: {
+        goalsAccount: true, // Include the goals account data
+      },
     })
 
     // If no settings exist, create default settings
@@ -31,6 +34,10 @@ export async function GET(request: NextRequest) {
           goalReminders: true,
           lowBalanceAlerts: true,
           budgetAlerts: true,
+          goalsAccountId: null,
+        },
+        include: {
+          goalsAccount: true,
         },
       })
     }
@@ -71,6 +78,7 @@ export async function PUT(request: NextRequest) {
         goalReminders: data.goalReminders,
         lowBalanceAlerts: data.lowBalanceAlerts,
         budgetAlerts: data.budgetAlerts,
+        goalsAccountId: data.goalsAccountId,
       },
       create: {
         userId,
@@ -90,6 +98,10 @@ export async function PUT(request: NextRequest) {
         goalReminders: data.goalReminders !== undefined ? data.goalReminders : true,
         lowBalanceAlerts: data.lowBalanceAlerts !== undefined ? data.lowBalanceAlerts : true,
         budgetAlerts: data.budgetAlerts !== undefined ? data.budgetAlerts : true,
+        goalsAccountId: data.goalsAccountId || null,
+      },
+      include: {
+        goalsAccount: true,
       },
     })
 

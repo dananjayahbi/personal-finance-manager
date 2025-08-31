@@ -54,12 +54,14 @@ model UserSettings {
   goalReminders      Boolean  @default(true)
   lowBalanceAlerts   Boolean  @default(true)
   budgetAlerts       Boolean  @default(true)
+  goalsAccountId     String?  @unique
   userId             String   @unique
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   // Relationships
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalsAccount       Account? @relation(fields: [goalsAccountId], references: [id])
 }
 
 model Category {
@@ -128,12 +130,14 @@ model Goal {
   currentAmount Float    @default(0)
   currency      String   @default("LKR")
   deadline      DateTime?
+  accountId     String?  // Reference to the goals account
   userId        String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   // Relationships
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account       Account? @relation(fields: [accountId], references: [id])
 }
 
 model Investment {
@@ -198,6 +202,8 @@ model Account {
   fromTransactions      Transaction[] @relation("FromTransactions")
   toTransactions        Transaction[] @relation("ToTransactions")
   bills                 Bill[]   // Bills associated with this account
+  userSettingsForGoals  UserSettings? // Reverse relation for goals account
+  goals                 Goal[]   // Goals using this account
 }
 
 model Bill {
