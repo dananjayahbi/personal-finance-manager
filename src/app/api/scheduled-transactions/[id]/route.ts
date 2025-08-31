@@ -41,24 +41,81 @@ export async function PUT(
             }
           })
 
-          // Update account balances
-          await tx.account.update({
-            where: { id: scheduledTransaction.fromAccountId },
-            data: {
-              balance: {
-                decrement: scheduledTransaction.amount
-              }
+          // Handle account balance updates based on transaction type
+          if (scheduledTransaction.type === "TRANSFER") {
+            // Transfer: decrease from account, increase to account
+            if (scheduledTransaction.fromAccountId) {
+              await tx.account.update({
+                where: { id: scheduledTransaction.fromAccountId },
+                data: {
+                  balance: {
+                    decrement: scheduledTransaction.amount
+                  }
+                }
+              })
             }
-          })
 
-          await tx.account.update({
-            where: { id: scheduledTransaction.toAccountId },
-            data: {
-              balance: {
-                increment: scheduledTransaction.amount
-              }
+            if (scheduledTransaction.toAccountId) {
+              await tx.account.update({
+                where: { id: scheduledTransaction.toAccountId },
+                data: {
+                  balance: {
+                    increment: scheduledTransaction.amount
+                  }
+                }
+              })
             }
-          })
+          } else if (scheduledTransaction.type === "INCOME") {
+            // Income: increase to account balance
+            if (scheduledTransaction.toAccountId) {
+              await tx.account.update({
+                where: { id: scheduledTransaction.toAccountId },
+                data: {
+                  balance: {
+                    increment: scheduledTransaction.amount
+                  }
+                }
+              })
+            }
+
+            // Create a regular transaction record for income
+            await tx.transaction.create({
+              data: {
+                amount: scheduledTransaction.amount,
+                currency: scheduledTransaction.currency,
+                description: scheduledTransaction.description,
+                type: "INCOME",
+                toAccountId: scheduledTransaction.toAccountId,
+                userId: scheduledTransaction.userId,
+                date: new Date()
+              }
+            })
+          } else if (scheduledTransaction.type === "EXPENSE") {
+            // Expense: decrease from account balance
+            if (scheduledTransaction.fromAccountId) {
+              await tx.account.update({
+                where: { id: scheduledTransaction.fromAccountId },
+                data: {
+                  balance: {
+                    decrement: scheduledTransaction.amount
+                  }
+                }
+              })
+            }
+
+            // Create a regular transaction record for expense
+            await tx.transaction.create({
+              data: {
+                amount: scheduledTransaction.amount,
+                currency: scheduledTransaction.currency,
+                description: scheduledTransaction.description,
+                type: "EXPENSE",
+                fromAccountId: scheduledTransaction.fromAccountId,
+                userId: scheduledTransaction.userId,
+                date: new Date()
+              }
+            })
+          }
 
           return updatedTransaction
         })
@@ -79,24 +136,77 @@ export async function PUT(
             }
           })
 
-          // Reverse account balance changes
-          await tx.account.update({
-            where: { id: scheduledTransaction.fromAccountId },
-            data: {
-              balance: {
-                increment: scheduledTransaction.amount
-              }
+          // Handle account balance reversal based on transaction type
+          if (scheduledTransaction.type === "TRANSFER") {
+            // Transfer reversal: increase from account, decrease to account
+            if (scheduledTransaction.fromAccountId) {
+              await tx.account.update({
+                where: { id: scheduledTransaction.fromAccountId },
+                data: {
+                  balance: {
+                    increment: scheduledTransaction.amount
+                  }
+                }
+              })
             }
-          })
 
-          await tx.account.update({
-            where: { id: scheduledTransaction.toAccountId },
-            data: {
-              balance: {
-                decrement: scheduledTransaction.amount
-              }
+            if (scheduledTransaction.toAccountId) {
+              await tx.account.update({
+                where: { id: scheduledTransaction.toAccountId },
+                data: {
+                  balance: {
+                    decrement: scheduledTransaction.amount
+                  }
+                }
+              })
             }
-          })
+          } else if (scheduledTransaction.type === "INCOME") {
+            // Income reversal: decrease to account balance
+            if (scheduledTransaction.toAccountId) {
+              await tx.account.update({
+                where: { id: scheduledTransaction.toAccountId },
+                data: {
+                  balance: {
+                    decrement: scheduledTransaction.amount
+                  }
+                }
+              })
+            }
+
+            // Remove the transaction record created for income
+            await tx.transaction.deleteMany({
+              where: {
+                amount: scheduledTransaction.amount,
+                description: scheduledTransaction.description,
+                type: "INCOME",
+                toAccountId: scheduledTransaction.toAccountId,
+                userId: scheduledTransaction.userId
+              }
+            })
+          } else if (scheduledTransaction.type === "EXPENSE") {
+            // Expense reversal: increase from account balance
+            if (scheduledTransaction.fromAccountId) {
+              await tx.account.update({
+                where: { id: scheduledTransaction.fromAccountId },
+                data: {
+                  balance: {
+                    increment: scheduledTransaction.amount
+                  }
+                }
+              })
+            }
+
+            // Remove the transaction record created for expense
+            await tx.transaction.deleteMany({
+              where: {
+                amount: scheduledTransaction.amount,
+                description: scheduledTransaction.description,
+                type: "EXPENSE",
+                fromAccountId: scheduledTransaction.fromAccountId,
+                userId: scheduledTransaction.userId
+              }
+            })
+          }
 
           return updatedTransaction
         })
@@ -113,12 +223,13 @@ export async function PUT(
       }
     } else {
       // This is a regular update
-      const { description, amount, currency, fromAccountId, toAccountId, scheduledDate, frequency } = requestData
+      const { description, amount, currency, type, fromAccountId, toAccountId, scheduledDate, frequency } = requestData
 
       const updateData: any = {}
       if (description !== undefined) updateData.description = description
       if (amount !== undefined) updateData.amount = parseFloat(amount)
       if (currency !== undefined) updateData.currency = currency
+      if (type !== undefined) updateData.type = type
       if (fromAccountId !== undefined) updateData.fromAccountId = fromAccountId
       if (toAccountId !== undefined) updateData.toAccountId = toAccountId
       if (scheduledDate !== undefined) updateData.scheduledDate = new Date(scheduledDate)

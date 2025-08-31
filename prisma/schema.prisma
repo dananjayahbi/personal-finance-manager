@@ -256,8 +256,9 @@ model ScheduledTransaction {
   amount          Float
   currency        String      @default("LKR")
   description     String
-  fromAccountId   String
-  toAccountId     String
+  type            TransactionType @default(TRANSFER) // INCOME, EXPENSE, or TRANSFER
+  fromAccountId   String?     // Optional for INCOME transactions
+  toAccountId     String?     // Optional for EXPENSE transactions
   scheduledDate   DateTime
   frequency       String?     // "once", "daily", "weekly", "monthly", "yearly"
   isExecuted      Boolean     @default(false)

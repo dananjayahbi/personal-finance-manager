@@ -128,12 +128,12 @@ export default function TransactionsPage() {
         // Convert API scheduled transactions to the format expected by the page
         const convertedTransactions: Transaction[] = data.scheduledTransactions.map((tx: any) => {
           // Find account names from the accounts array
-          const fromAccount = accounts.find(acc => acc.id === tx.fromAccountId)
-          const toAccount = accounts.find(acc => acc.id === tx.toAccountId)
+          const fromAccount = tx.fromAccountId ? accounts.find(acc => acc.id === tx.fromAccountId) : null
+          const toAccount = tx.toAccountId ? accounts.find(acc => acc.id === tx.toAccountId) : null
           
           return {
             id: tx.id,
-            type: "TRANSFER" as const,
+            type: tx.type || "TRANSFER",
             amount: tx.amount,
             currency: tx.currency,
             description: tx.description,
@@ -159,25 +159,54 @@ export default function TransactionsPage() {
 
   const handleAddTransaction = async () => {
     try {
-      // Find account IDs based on selected account names
-      const fromAccount = accounts.find(acc => acc.name === newTransaction.fromAccount)
-      const toAccount = accounts.find(acc => acc.name === newTransaction.toAccount)
+      let fromAccount, toAccount;
 
-      if (!fromAccount || !toAccount) {
-        toast({
-          title: "Error",
-          description: "Please select both from and to accounts",
-          variant: "destructive",
-        })
-        return
+      if (transactionType === "TRANSFER") {
+        // Find account IDs based on selected account names
+        fromAccount = accounts.find(acc => acc.name === newTransaction.fromAccount)
+        toAccount = accounts.find(acc => acc.name === newTransaction.toAccount)
+
+        if (!fromAccount || !toAccount) {
+          toast({
+            title: "Error",
+            description: "Please select both from and to accounts",
+            variant: "destructive",
+          })
+          return
+        }
+      } else if (transactionType === "INCOME") {
+        // For income, we only need a destination account
+        toAccount = accounts.find(acc => acc.name === newTransaction.toAccount)
+        
+        if (!toAccount) {
+          toast({
+            title: "Error",
+            description: "Please select an account to deposit income",
+            variant: "destructive",
+          })
+          return
+        }
+      } else if (transactionType === "EXPENSE") {
+        // For expense, we only need a source account
+        fromAccount = accounts.find(acc => acc.name === newTransaction.fromAccount)
+        
+        if (!fromAccount) {
+          toast({
+            title: "Error",
+            description: "Please select an account to pay from",
+            variant: "destructive",
+          })
+          return
+        }
       }
 
       const transactionData = {
         description: newTransaction.description,
         amount: parseFloat(newTransaction.amount) || 0,
         currency: newTransaction.currency,
-        fromAccountId: fromAccount.id,
-        toAccountId: toAccount.id,
+        type: transactionType,
+        fromAccountId: fromAccount?.id || null,
+        toAccountId: toAccount?.id || null,
         scheduledDate: newTransaction.scheduledDate.toISOString(),
         frequency: newTransaction.frequency
       }
@@ -521,7 +550,7 @@ export default function TransactionsPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
             <p className="text-muted-foreground">
-              Manage transfers between accounts and schedule future transactions
+              Schedule transfers, income, and expense transactions for your accounts
             </p>
           </div>
           <div className="flex space-x-2">
@@ -619,8 +648,8 @@ export default function TransactionsPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Scheduled Transfers</CardTitle>
-                  <CardDescription>Manage your account transfers and scheduled transactions</CardDescription>
+                  <CardTitle>Scheduled Transactions</CardTitle>
+                  <CardDescription>Manage your transfers, income, and expense transactions</CardDescription>
                 </div>
                 {transactions.length > 0 && (
                   <div className="flex items-center space-x-2">
@@ -660,9 +689,25 @@ export default function TransactionsPage() {
                             {transaction.description}
                           </h4>
                           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                            <span>{transaction.fromAccount}</span>
-                            <ArrowLeftRight className="h-3 w-3" />
-                            <span>{transaction.toAccount}</span>
+                            {transaction.type === "TRANSFER" && (
+                              <>
+                                <span>{transaction.fromAccount}</span>
+                                <ArrowLeftRight className="h-3 w-3" />
+                                <span>{transaction.toAccount}</span>
+                              </>
+                            )}
+                            {transaction.type === "INCOME" && (
+                              <>
+                                <span className="text-green-600">Income to</span>
+                                <span>{transaction.toAccount}</span>
+                              </>
+                            )}
+                            {transaction.type === "EXPENSE" && (
+                              <>
+                                <span className="text-red-600">Expense from</span>
+                                <span>{transaction.fromAccount}</span>
+                              </>
+                            )}
                             {transaction.frequency !== "once" && (
                               <Badge variant="secondary" className="text-xs">
                                 <Repeat className="mr-1 h-3 w-3" />
@@ -848,6 +893,48 @@ export default function TransactionsPage() {
                 </>
               )}
 
+              {transactionType === "INCOME" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="to-account">Deposit To Account</Label>
+                  <Select
+                    value={newTransaction.toAccount}
+                    onValueChange={(value) => setNewTransaction({...newTransaction, toAccount: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select account to deposit income" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map(account => (
+                        <SelectItem key={account.id} value={account.name}>
+                          {account.name} (${account.balance.toFixed(2)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {transactionType === "EXPENSE" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="from-account">Pay From Account</Label>
+                  <Select
+                    value={newTransaction.fromAccount}
+                    onValueChange={(value) => setNewTransaction({...newTransaction, fromAccount: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select account to pay from" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map(account => (
+                        <SelectItem key={account.id} value={account.name}>
+                          {account.name} (${account.balance.toFixed(2)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="grid gap-2">
                 <Label>Scheduled Date</Label>
                 <Popover>
@@ -895,7 +982,14 @@ export default function TransactionsPage() {
               </Button>
               <Button 
                 onClick={handleAddTransaction} 
-                disabled={!newTransaction.description || !newTransaction.amount || parseFloat(newTransaction.amount) <= 0}
+                disabled={
+                  !newTransaction.description || 
+                  !newTransaction.amount || 
+                  parseFloat(newTransaction.amount) <= 0 ||
+                  (transactionType === "TRANSFER" && (!newTransaction.fromAccount || !newTransaction.toAccount)) ||
+                  (transactionType === "INCOME" && !newTransaction.toAccount) ||
+                  (transactionType === "EXPENSE" && !newTransaction.fromAccount)
+                }
               >
                 Schedule Transaction
               </Button>

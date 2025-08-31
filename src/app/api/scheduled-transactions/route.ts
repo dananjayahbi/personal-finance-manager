@@ -30,15 +30,38 @@ export async function POST(request: NextRequest) {
       description, 
       amount, 
       currency, 
+      type,
       fromAccountId, 
       toAccountId, 
       scheduledDate, 
       frequency 
     } = await request.json()
 
-    if (!description || !amount || !fromAccountId || !toAccountId || !scheduledDate) {
+    if (!description || !amount || !scheduledDate) {
       return NextResponse.json(
-        { error: "Description, amount, fromAccountId, toAccountId, and scheduledDate are required" },
+        { error: "Description, amount, and scheduledDate are required" },
+        { status: 400 }
+      )
+    }
+
+    // Validate account requirements based on transaction type
+    if (type === "TRANSFER" && (!fromAccountId || !toAccountId)) {
+      return NextResponse.json(
+        { error: "Both fromAccountId and toAccountId are required for TRANSFER transactions" },
+        { status: 400 }
+      )
+    }
+
+    if (type === "INCOME" && !toAccountId) {
+      return NextResponse.json(
+        { error: "toAccountId is required for INCOME transactions" },
+        { status: 400 }
+      )
+    }
+
+    if (type === "EXPENSE" && !fromAccountId) {
+      return NextResponse.json(
+        { error: "fromAccountId is required for EXPENSE transactions" },
         { status: 400 }
       )
     }
@@ -51,8 +74,9 @@ export async function POST(request: NextRequest) {
         description,
         amount: parseFloat(amount),
         currency: currency || "LKR",
-        fromAccountId,
-        toAccountId,
+        type: type || "TRANSFER",
+        fromAccountId: fromAccountId || null,
+        toAccountId: toAccountId || null,
         scheduledDate: new Date(scheduledDate),
         frequency: frequency || "once",
         userId
