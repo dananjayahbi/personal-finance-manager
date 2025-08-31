@@ -259,6 +259,16 @@ export default function TransactionsPage() {
   }
 
   const handleEdit = (transaction: Transaction) => {
+    // Check if transaction is executed
+    if (transaction.isExecuted) {
+      toast({
+        title: "Cannot Edit Executed Transaction",
+        description: "Please undo the execution first before editing this transaction.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setSelectedTransaction(transaction)
     setTransactionType(transaction.type)
     setShowEditForm(true)
@@ -309,6 +319,13 @@ export default function TransactionsPage() {
 
   const reverseExecution = async (transactionId: string) => {
     try {
+      // Show confirmation dialog
+      const confirmed = window.confirm(
+        "Are you sure you want to undo this transaction? This will reverse the account balance changes and allow you to edit the transaction."
+      )
+      
+      if (!confirmed) return
+
       const response = await fetch(`/api/scheduled-transactions/${transactionId}`, {
         method: 'PUT',
         headers: {
@@ -321,7 +338,7 @@ export default function TransactionsPage() {
       if (response.ok) {
         toast({
           title: "Success",
-          description: "Transaction execution undone successfully",
+          description: "Transaction execution undone successfully. You can now edit it.",
         })
         // Refresh both accounts and transactions to show updated balances
         await fetchAccounts()
@@ -673,7 +690,7 @@ export default function TransactionsPage() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.3 + index * 0.05 }}
                       className={`flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors ${
-                        transaction.isExecuted ? 'opacity-75' : ''
+                        transaction.isExecuted ? 'opacity-75 bg-gray-50' : ''
                       }`}
                     >
                       <div className="flex items-center space-x-4">
@@ -687,6 +704,11 @@ export default function TransactionsPage() {
                         <div>
                           <h4 className={`font-medium ${transaction.isExecuted ? 'line-through text-muted-foreground' : ''}`}>
                             {transaction.description}
+                            {transaction.isExecuted && (
+                              <span className="ml-2 text-xs text-amber-600 font-normal">
+                                (Undo execution to edit)
+                              </span>
+                            )}
                           </h4>
                           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                             {transaction.type === "TRANSFER" && (
@@ -737,6 +759,12 @@ export default function TransactionsPage() {
                           {getStatusText(transaction)}
                         </Badge>
 
+                        {transaction.isExecuted && (
+                          <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
+                            Locked
+                          </Badge>
+                        )}
+
                         <div className="flex space-x-2">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -755,8 +783,15 @@ export default function TransactionsPage() {
                                   Undo Execution
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuItem onClick={() => handleEdit(transaction)}>
+                              <DropdownMenuItem 
+                                onClick={() => handleEdit(transaction)}
+                                disabled={transaction.isExecuted}
+                                className={transaction.isExecuted ? "text-muted-foreground opacity-50" : ""}
+                              >
                                 Edit
+                                {transaction.isExecuted && (
+                                  <span className="ml-2 text-xs">(Undo first)</span>
+                                )}
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 onClick={() => handleDeleteTransaction(transaction.id)}
