@@ -121,24 +121,15 @@ export default function Sidebar({ className }: SidebarProps) {
               transition={{ duration: 0.2 }}
               className="flex items-center space-x-2"
             >
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#1462EC] to-[#1462EC] flex items-center justify-center">
                 <TrendingUp className="h-5 w-5 text-white" />
               </div>
-              <span className="font-bold text-lg bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="font-bold text-lg bg-gradient-to-r from-[#1462EC] to-[#1462EC] bg-clip-text text-transparent">
                 FinanceHub
               </span>
             </motion.div>
           ) : (
-            <motion.div
-              key="collapsed"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ duration: 0.2 }}
-              className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mx-auto"
-            >
-              <TrendingUp className="h-5 w-5 text-white" />
-            </motion.div>
+            <></>
           )}
         </AnimatePresence>
         
@@ -171,7 +162,7 @@ export default function Sidebar({ className }: SidebarProps) {
               transition={{ duration: 0.2 }}
               className="flex items-center space-x-3"
             >
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-[#1462EC] to-[#1462EC] flex items-center justify-center">
                 <User className="h-5 w-5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
@@ -190,7 +181,7 @@ export default function Sidebar({ className }: SidebarProps) {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.2 }}
-              className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mx-auto"
+              className="h-10 w-10 rounded-full bg-gradient-to-br from-[#1462EC] to-[#1462EC] flex items-center justify-center mx-auto"
             >
               <User className="h-5 w-5 text-white" />
             </motion.div>
@@ -216,7 +207,7 @@ export default function Sidebar({ className }: SidebarProps) {
                     className={cn(
                       "w-full justify-start h-10",
                       collapsed && "justify-center",
-                      isActive && "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
+                      isActive && "bg-gradient-to-r from-[#1462EC] to-[#1462EC] text-white shadow-lg"
                     )}
                   >
                     <item.icon className={cn("h-4 w-4", !collapsed && "mr-3")} />
