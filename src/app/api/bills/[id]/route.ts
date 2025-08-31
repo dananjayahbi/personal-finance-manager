@@ -4,14 +4,18 @@ import { db } from "@/lib/db"
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const { name, amount, currency, dueDate, frequency, categoryId, description, isRecurring, isPaid } = await request.json()
+    const { name, amount, currency, dueDate, frequency, categoryId, accountId, description, isRecurring, isPaid } = await request.json()
 
     // In a real app, you would get the user ID from the session
     const userId = request.headers.get("x-user-id") || "user-1"
 
     // Verify the bill belongs to the user
     const existingBill = await db.bill.findFirst({
-      where: { id, userId }
+      where: { id, userId },
+      include: {
+        account: true,
+        transaction: true
+      }
     })
 
     if (!existingBill) {
@@ -19,6 +23,76 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         { error: "Bill not found" },
         { status: 404 }
       )
+    }
+
+    // Handle bill execution logic
+    let transactionId = existingBill.transactionId
+    let newTransaction: any = null
+
+    // If bill is being marked as paid and wasn't paid before
+    if (isPaid && !existingBill.isPaid && existingBill.accountId) {
+      try {
+        // Create expense transaction
+        const createdTransaction = await db.transaction.create({
+          data: {
+            amount: existingBill.amount,
+            currency: existingBill.currency,
+            description: `Bill payment: ${existingBill.name}`,
+            type: 'EXPENSE',
+            categoryId: existingBill.categoryId,
+            fromAccountId: existingBill.accountId,
+            userId: userId,
+            date: new Date()
+          }
+        })
+
+        // Update account balance
+        await db.account.update({
+          where: { id: existingBill.accountId },
+          data: {
+            balance: {
+              decrement: existingBill.amount
+            }
+          }
+        })
+
+        newTransaction = createdTransaction
+        transactionId = createdTransaction.id
+      } catch (error) {
+        console.error('Error creating transaction for bill execution:', error)
+        return NextResponse.json(
+          { error: "Failed to execute bill payment" },
+          { status: 500 }
+        )
+      }
+    }
+    
+    // If bill is being marked as unpaid and was paid before (undo)
+    else if (!isPaid && existingBill.isPaid && existingBill.transactionId && existingBill.accountId) {
+      try {
+        // Delete the transaction
+        await db.transaction.delete({
+          where: { id: existingBill.transactionId }
+        })
+
+        // Restore account balance
+        await db.account.update({
+          where: { id: existingBill.accountId },
+          data: {
+            balance: {
+              increment: existingBill.amount
+            }
+          }
+        })
+
+        transactionId = null
+      } catch (error) {
+        console.error('Error undoing bill payment:', error)
+        return NextResponse.json(
+          { error: "Failed to undo bill payment" },
+          { status: 500 }
+        )
+      }
     }
 
     const bill = await db.bill.update({
@@ -30,15 +104,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         dueDate: dueDate ? new Date(dueDate) : existingBill.dueDate,
         frequency: frequency || existingBill.frequency,
         categoryId: categoryId !== undefined ? categoryId : existingBill.categoryId,
+        accountId: accountId !== undefined ? accountId : existingBill.accountId,
         description: description !== undefined ? description : existingBill.description,
         isRecurring: isRecurring !== undefined ? isRecurring : existingBill.isRecurring,
-        isPaid: isPaid !== undefined ? isPaid : existingBill.isPaid
+        isPaid: isPaid !== undefined ? isPaid : existingBill.isPaid,
+        transactionId: transactionId
+      },
+      include: {
+        category: true,
+        account: true,
+        transaction: true
       }
     })
 
     return NextResponse.json({
       message: "Bill updated successfully",
-      bill
+      bill,
+      transaction: newTransaction
     })
 
   } catch (error) {

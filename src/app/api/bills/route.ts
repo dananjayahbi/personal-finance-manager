@@ -8,6 +8,11 @@ export async function GET(request: NextRequest) {
 
     const bills = await db.bill.findMany({
       where: { userId },
+      include: {
+        category: true,
+        account: true,
+        transaction: true
+      },
       orderBy: { dueDate: "asc" }
     })
 
@@ -26,7 +31,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, amount, currency, dueDate, frequency, categoryId, description, isRecurring } = await request.json()
+    const { name, amount, currency, dueDate, frequency, categoryId, accountId, description, isRecurring } = await request.json()
 
     if (!name || !amount || !dueDate) {
       return NextResponse.json(
@@ -38,18 +43,38 @@ export async function POST(request: NextRequest) {
     // In a real app, you would get the user ID from the session
     const userId = request.headers.get("x-user-id") || "user-1"
 
+    // Validate accountId if provided
+    if (accountId) {
+      const accountExists = await db.account.findFirst({
+        where: { id: accountId, userId }
+      })
+      
+      if (!accountExists) {
+        return NextResponse.json(
+          { error: `Invalid account selected: ${accountId}` },
+          { status: 400 }
+        )
+      }
+    }
+
     const bill = await db.bill.create({
       data: {
         name,
         amount: parseFloat(amount),
-        currency: currency || "USD",
+        currency: currency || "LKR",
         dueDate: new Date(dueDate),
         frequency: frequency || "MONTHLY",
         categoryId: categoryId || null,
+        accountId: accountId || null,
         description: description || "",
         isRecurring: isRecurring || false,
         isPaid: false,
         userId
+      },
+      include: {
+        category: true,
+        account: true,
+        transaction: true
       }
     })
 

@@ -100,6 +100,7 @@ model Transaction {
   category    Category?     @relation(fields: [categoryId], references: [id])
   fromAccount Account?      @relation("FromTransactions", fields: [fromAccountId], references: [id])
   toAccount   Account?      @relation("ToTransactions", fields: [toAccountId], references: [id])
+  bill        Bill?         @relation() // Bill that created this transaction
 }
 
 model Budget {
@@ -196,6 +197,7 @@ model Account {
   user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   fromTransactions      Transaction[] @relation("FromTransactions")
   toTransactions        Transaction[] @relation("ToTransactions")
+  bills                 Bill[]   // Bills associated with this account
 }
 
 model Bill {
@@ -206,16 +208,20 @@ model Bill {
   dueDate     DateTime
   frequency   BillFrequency
   categoryId  String?
+  accountId   String?  // Account to deduct payment from
   userId      String
   isPaid      Boolean  @default(false)
   isRecurring Boolean  @default(true)
   description String?
+  transactionId String? @unique // Transaction created when bill is executed
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relationships
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   category    Category? @relation(fields: [categoryId], references: [id])
+  account     Account?  @relation(fields: [accountId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
 }
 
 model Activity {

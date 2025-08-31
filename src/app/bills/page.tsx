@@ -45,6 +45,9 @@ interface Bill {
   isRecurring: boolean
   description?: string
   daysUntilDue: number
+  account?: string
+  accountId?: string
+  transactionId?: string
 }
 
 export default function BillsPage() {
@@ -57,6 +60,8 @@ export default function BillsPage() {
   const [isAddingBill, setIsAddingBill] = useState(false)
   const [isUpdatingBill, setIsUpdatingBill] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>()
+  const [accounts, setAccounts] = useState<any[]>([])
+  const [categories, setCategories] = useState<any[]>([])
   const [newBill, setNewBill] = useState({
     name: "",
     amount: "",
@@ -65,11 +70,14 @@ export default function BillsPage() {
     frequency: "MONTHLY",
     category: "",
     description: "",
-    isRecurring: true
+    isRecurring: true,
+    account: ""
   })
 
   useEffect(() => {
     fetchBills()
+    fetchAccounts()
+    fetchCategories()
   }, [])
 
   const fetchBills = async () => {
@@ -88,7 +96,8 @@ export default function BillsPage() {
             ...bill,
             dueDate,
             daysUntilDue,
-            category: bill.category?.name || "Uncategorized"
+            category: bill.category?.name || "",
+            account: bill.account?.name || ""
           }
         })
         setBills(billsWithDaysCalculated)
@@ -103,6 +112,44 @@ export default function BillsPage() {
     }
   }
 
+  const fetchAccounts = async () => {
+    try {
+      const response = await fetch('/api/accounts')
+      const data = await response.json()
+      
+      if (response.ok) {
+        setAccounts(data.accounts)
+      } else {
+        console.error('Failed to fetch accounts:', data.error)
+        setAccounts([])
+      }
+    } catch (error) {
+      console.error('Error fetching accounts:', error)
+      setAccounts([])
+    }
+  }
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/categories', {
+        headers: {
+          'x-user-id': 'user-1'
+        }
+      })
+      const data = await response.json()
+      
+      if (response.ok) {
+        setCategories(data.categories)
+      } else {
+        console.error('Failed to fetch categories:', data.error)
+        setCategories([])
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+      setCategories([])
+    }
+  }
+
   const handleAddBill = async () => {
     setIsAddingBill(true)
     try {
@@ -113,6 +160,7 @@ export default function BillsPage() {
         dueDate: newBill.dueDate.toISOString(),
         frequency: newBill.frequency,
         categoryId: null, // For now, we'll set this to null
+        accountId: newBill.account && newBill.account.trim() !== "" ? newBill.account : null,
         description: newBill.description,
         isRecurring: newBill.isRecurring
       }
@@ -120,7 +168,8 @@ export default function BillsPage() {
       const response = await fetch('/api/bills', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-user-id': 'user-1'
         },
         body: JSON.stringify(billData)
       })
@@ -138,7 +187,8 @@ export default function BillsPage() {
           frequency: "MONTHLY",
           category: "",
           description: "",
-          isRecurring: true
+          isRecurring: true,
+          account: ""
         })
         setShowAddForm(false)
       } else {
@@ -161,7 +211,8 @@ export default function BillsPage() {
       const response = await fetch(`/api/bills/${billId}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-user-id': 'user-1'
         },
         body: JSON.stringify({
           isPaid: !bill.isPaid
@@ -193,7 +244,8 @@ export default function BillsPage() {
       frequency: bill.frequency,
       category: bill.category,
       description: bill.description || "",
-      isRecurring: bill.isRecurring
+      isRecurring: bill.isRecurring,
+      account: bill.accountId || ""
     })
     setShowEditForm(true)
   }
@@ -209,6 +261,7 @@ export default function BillsPage() {
         currency: newBill.currency,
         dueDate: newBill.dueDate.toISOString(),
         frequency: newBill.frequency,
+        accountId: newBill.account && newBill.account.trim() !== "" ? newBill.account : null,
         description: newBill.description,
         isRecurring: newBill.isRecurring
       }
@@ -217,6 +270,7 @@ export default function BillsPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'x-user-id': 'user-1'
         },
         body: JSON.stringify(billData)
       })
@@ -233,7 +287,8 @@ export default function BillsPage() {
           frequency: "MONTHLY",
           category: "",
           description: "",
-          isRecurring: true
+          isRecurring: true,
+          account: ""
         })
         setShowEditForm(false)
       } else {
@@ -261,6 +316,9 @@ export default function BillsPage() {
     try {
       const response = await fetch(`/api/bills/${selectedBill.id}`, {
         method: 'DELETE',
+        headers: {
+          'x-user-id': 'user-1'
+        }
       })
 
       if (response.ok) {
@@ -440,9 +498,11 @@ export default function BillsPage() {
                               {bill.name}
                             </h3>
                             <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                              <Badge variant="outline" className="text-xs">
-                                {bill.category}
-                              </Badge>
+                              {bill.category && (
+                                <Badge variant="outline" className="text-xs">
+                                  {bill.category}
+                                </Badge>
+                              )}
                               {bill.isRecurring && (
                                 <Badge variant="secondary" className="text-xs">
                                   {bill.frequency}
@@ -577,6 +637,25 @@ export default function BillsPage() {
               </div>
 
               <div className="grid gap-2">
+                <Label htmlFor="account">Account</Label>
+                <Select
+                  value={newBill.account}
+                  onValueChange={(value) => setNewBill({...newBill, account: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map(account => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name} ({account.currency} {account.balance.toFixed(2)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
                 <Label>Due Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
@@ -618,12 +697,34 @@ export default function BillsPage() {
 
                 <div className="grid gap-2">
                   <Label htmlFor="category">Category</Label>
-                  <Input
-                    id="category"
+                  <Select
                     value={newBill.category}
-                    onChange={(e) => setNewBill({...newBill, category: e.target.value})}
-                    placeholder="e.g., Utilities"
-                  />
+                    onValueChange={(value) => setNewBill({...newBill, category: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {/* Default categories */}
+                      <SelectItem value="Utilities">Utilities</SelectItem>
+                      <SelectItem value="Rent">Rent</SelectItem>
+                      <SelectItem value="Insurance">Insurance</SelectItem>
+                      <SelectItem value="Internet">Internet</SelectItem>
+                      <SelectItem value="Phone">Phone</SelectItem>
+                      <SelectItem value="Subscriptions">Subscriptions</SelectItem>
+                      <SelectItem value="Loan Payments">Loan Payments</SelectItem>
+                      <SelectItem value="Credit Card">Credit Card</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                      {/* Database categories */}
+                      {categories.filter(category => 
+                        !['Utilities', 'Rent', 'Insurance', 'Internet', 'Phone', 'Subscriptions', 'Loan Payments', 'Credit Card', 'Other'].includes(category.name)
+                      ).map((category) => (
+                        <SelectItem key={category.id} value={category.name}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -711,6 +812,25 @@ export default function BillsPage() {
               </div>
 
               <div className="grid gap-2">
+                <Label htmlFor="edit-account">Account</Label>
+                <Select
+                  value={newBill.account}
+                  onValueChange={(value) => setNewBill({...newBill, account: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map(account => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name} ({account.currency} {account.balance.toFixed(2)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
                 <Label>Due Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
@@ -755,12 +875,34 @@ export default function BillsPage() {
 
                 <div className="grid gap-2">
                   <Label htmlFor="edit-category">Category</Label>
-                  <Input
-                    id="edit-category"
+                  <Select
                     value={newBill.category}
-                    onChange={(e) => setNewBill({...newBill, category: e.target.value})}
-                    placeholder="e.g., Utilities"
-                  />
+                    onValueChange={(value) => setNewBill({...newBill, category: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {/* Default categories */}
+                      <SelectItem value="Utilities">Utilities</SelectItem>
+                      <SelectItem value="Rent">Rent</SelectItem>
+                      <SelectItem value="Insurance">Insurance</SelectItem>
+                      <SelectItem value="Internet">Internet</SelectItem>
+                      <SelectItem value="Phone">Phone</SelectItem>
+                      <SelectItem value="Subscriptions">Subscriptions</SelectItem>
+                      <SelectItem value="Loan Payments">Loan Payments</SelectItem>
+                      <SelectItem value="Credit Card">Credit Card</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                      {/* Database categories */}
+                      {categories.filter(category => 
+                        !['Utilities', 'Rent', 'Insurance', 'Internet', 'Phone', 'Subscriptions', 'Loan Payments', 'Credit Card', 'Other'].includes(category.name)
+                      ).map((category) => (
+                        <SelectItem key={category.id} value={category.name}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
