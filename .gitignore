@@ -49,4 +49,4 @@ prompt
 server.log
 
 prisma/migrations/
-prisma/custom.db
+prisma/db/finance.db

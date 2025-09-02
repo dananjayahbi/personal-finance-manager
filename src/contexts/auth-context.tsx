@@ -6,6 +6,9 @@ interface User {
   id: string
   email: string
   name?: string
+  firstName?: string
+  lastName?: string
+  phone?: string
   preferredCurrency: string
   createdAt: string
   updatedAt: string
@@ -17,6 +20,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>
   signup: (name: string, email: string, password: string, currency: string) => Promise<boolean>
   logout: () => void
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -32,17 +36,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkAuthStatus = async () => {
     try {
-      // In a real app, you would check for a valid session token
-      // For now, we'll check localStorage for a user object
-      const savedUser = localStorage.getItem("finance-app-user")
-      if (savedUser) {
-        const userData = JSON.parse(savedUser)
-        setUser(userData)
+      // Try to fetch user data from the API
+      const response = await fetch('/api/user')
+      if (response.ok) {
+        const data = await response.json()
+        setUser(data.user)
+        localStorage.setItem("finance-app-user", JSON.stringify(data.user))
+      } else {
+        // If API fails, check localStorage for saved user
+        const savedUser = localStorage.getItem("finance-app-user")
+        if (savedUser) {
+          const userData = JSON.parse(savedUser)
+          setUser(userData)
+        } else {
+          // If nothing works, create demo user
+          const demoUser = {
+            id: "user-1",
+            email: "demo@example.com",
+            name: "Demo User",
+            firstName: "",
+            lastName: "",
+            phone: "",
+            preferredCurrency: "LKR",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+          setUser(demoUser)
+          localStorage.setItem("finance-app-user", JSON.stringify(demoUser))
+        }
       }
     } catch (error) {
       console.error("Auth status check failed:", error)
+      // Fallback to demo user
+      const demoUser = {
+        id: "user-1",
+        email: "demo@example.com",
+        name: "Demo User",
+        firstName: "",
+        lastName: "",
+        phone: "",
+        preferredCurrency: "LKR",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+      setUser(demoUser)
+      localStorage.setItem("finance-app-user", JSON.stringify(demoUser))
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const refreshUser = async () => {
+    try {
+      const response = await fetch('/api/user')
+      if (response.ok) {
+        const data = await response.json()
+        setUser(data.user)
+        localStorage.setItem("finance-app-user", JSON.stringify(data.user))
+      }
+    } catch (error) {
+      console.error("Failed to refresh user data:", error)
     }
   }
 
@@ -106,7 +159,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         signup,
-        logout
+        logout,
+        refreshUser
       }}
     >
       {children}

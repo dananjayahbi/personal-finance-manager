@@ -6,6 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Table,
   TableBody,
@@ -22,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import { motion } from "framer-motion"
 import {
   Search,
@@ -48,104 +53,85 @@ interface Expense {
   account: string
   recurring: boolean
   tags: string[]
+  notes?: string
+  currency: string
 }
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [accounts, setAccounts] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState<"date" | "amount" | "category">("date")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   const [selectedCategory, setSelectedCategory] = useState("all")
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isAddingExpense, setIsAddingExpense] = useState(false)
+  const [isUpdatingExpense, setIsUpdatingExpense] = useState(false)
+  const [newExpense, setNewExpense] = useState({
+    description: "",
+    amount: "",
+    category: "",
+    account: "",
+    currency: "LKR",
+    date: new Date().toISOString().split('T')[0],
+    notes: ""
+  })
 
   useEffect(() => {
     fetchExpenses()
+    fetchAccounts()
   }, [])
 
   const fetchExpenses = async () => {
-    // Mock data for demonstration
-    const mockExpenses: Expense[] = [
-      {
-        id: "1",
-        date: "2025-08-28",
-        description: "Grocery shopping at Whole Foods",
-        category: "Food & Dining",
-        amount: 125.50,
-        account: "Main Checking",
-        recurring: false,
-        tags: ["groceries", "weekly"]
-      },
-      {
-        id: "2",
-        date: "2025-08-27",
-        description: "Netflix subscription",
-        category: "Entertainment",
-        amount: 15.99,
-        account: "Credit Card",
-        recurring: true,
-        tags: ["streaming", "monthly"]
-      },
-      {
-        id: "3",
-        date: "2025-08-26",
-        description: "Gas station fill-up",
-        category: "Transportation",
-        amount: 68.75,
-        account: "Main Checking",
-        recurring: false,
-        tags: ["fuel", "car"]
-      },
-      {
-        id: "4",
-        date: "2025-08-25",
-        description: "Coffee shop meeting",
-        category: "Food & Dining",
-        amount: 12.50,
-        account: "Cash Wallet",
-        recurring: false,
-        tags: ["coffee", "business"]
-      },
-      {
-        id: "5",
-        date: "2025-08-24",
-        description: "Electric bill payment",
-        category: "Bills & Utilities",
-        amount: 89.20,
-        account: "Main Checking",
-        recurring: true,
-        tags: ["utilities", "monthly"]
-      },
-      {
-        id: "6",
-        date: "2025-08-23",
-        description: "Amazon online shopping",
-        category: "Shopping",
-        amount: 156.99,
-        account: "Credit Card",
-        recurring: false,
-        tags: ["online", "household"]
-      },
-      {
-        id: "7",
-        date: "2025-08-22",
-        description: "Gym membership",
-        category: "Health & Fitness",
-        amount: 45.00,
-        account: "Main Checking",
-        recurring: true,
-        tags: ["fitness", "monthly"]
-      },
-      {
-        id: "8",
-        date: "2025-08-21",
-        description: "Restaurant dinner",
-        category: "Food & Dining",
-        amount: 78.90,
-        account: "Credit Card",
-        recurring: false,
-        tags: ["dining", "weekend"]
+    try {
+      const response = await fetch('/api/transactions?type=EXPENSE')
+      const data = await response.json()
+      
+      if (response.ok) {
+        // Convert API transactions to expenses format
+        const convertedExpenses: Expense[] = data.transactions.map((tx: any) => ({
+          id: tx.id,
+          date: new Date(tx.date).toISOString().split('T')[0], // Convert to YYYY-MM-DD format
+          description: tx.description || "Expense",
+          category: tx.category?.name || "Other",
+          amount: tx.amount,
+          account: tx.fromAccount?.name || "Unknown",
+          recurring: tx.recurring || false,
+          tags: [], // Default empty tags since it's not in the database model
+          currency: tx.currency || "LKR",
+          notes: tx.notes || ""
+        }))
+        setExpenses(convertedExpenses)
+      } else {
+        console.error('Failed to fetch expenses:', data.error)
+        // Fall back to empty array if needed
+        setExpenses([])
       }
-    ]
-    setExpenses(mockExpenses)
+    } catch (error) {
+      console.error('Error fetching expenses:', error)
+      setExpenses([])
+    }
+  }
+
+  const fetchAccounts = async () => {
+    try {
+      const response = await fetch('/api/accounts')
+      const data = await response.json()
+      
+      if (response.ok) {
+        setAccounts(data.accounts)
+      } else {
+        console.error('Failed to fetch accounts:', data.error)
+        setAccounts([])
+      }
+    } catch (error) {
+      console.error('Error fetching accounts:', error)
+      setAccounts([])
+    }
   }
 
   const categories = useMemo(() => {
@@ -207,6 +193,201 @@ export default function ExpensesPage() {
     }
   }
 
+  const handleEditExpense = (expense: Expense) => {
+    setSelectedExpense(expense)
+    setNewExpense({
+      description: expense.description,
+      amount: expense.amount.toString(),
+      category: expense.category,
+      account: expense.account,
+      date: expense.date,
+      notes: expense.notes || "",
+      currency: expense.currency || "LKR"
+    })
+    setShowEditForm(true)
+  }
+
+  const handleDeleteExpense = (expense: Expense) => {
+    setSelectedExpense(expense)
+    setShowDeleteModal(true)
+  }
+
+  const confirmDeleteExpense = async () => {
+    if (!selectedExpense) return
+    
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/transactions/${selectedExpense.id}`, {
+        method: 'DELETE',
+      })
+      
+      if (response.ok) {
+        // Refresh both expenses list and account balances
+        fetchExpenses()
+        fetchAccounts()
+        setSelectedExpense(null)
+        setShowDeleteModal(false)
+      } else {
+        console.error("Failed to delete expense:", await response.text())
+      }
+    } catch (error) {
+      console.error("Failed to delete expense:", error)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleAddExpense = async () => {
+    if (!newExpense.description || !newExpense.amount || !newExpense.category || !newExpense.account) {
+      alert("Please fill in all required fields")
+      return
+    }
+
+    setIsAddingExpense(true)
+    try {
+      // Find the account ID based on selected account name
+      const selectedAccount = accounts.find(acc => acc.name === newExpense.account)
+      if (!selectedAccount) {
+        alert("Please select a valid account")
+        setIsAddingExpense(false)
+        return
+      }
+
+      const expenseData = {
+        description: newExpense.description,
+        amount: parseFloat(newExpense.amount),
+        type: "EXPENSE",
+        currency: newExpense.currency,
+        date: new Date(newExpense.date).toISOString(),
+        categoryId: "expense-category-1", // Default category for now
+        fromAccountId: selectedAccount.id, // For expenses, money comes from an account
+        recurring: false
+      }
+
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(expenseData)
+      })
+
+      if (response.ok) {
+        // Refresh expenses list and account balances
+        fetchExpenses()
+        fetchAccounts()
+        setNewExpense({
+          description: "",
+          amount: "",
+          category: "",
+          account: "",
+          date: new Date().toISOString().split('T')[0],
+          notes: "",
+          currency: "LKR"
+        })
+        setShowAddForm(false)
+      } else {
+        const errorData = await response.json()
+        console.error("Failed to add expense:", errorData)
+        alert("Failed to add expense. Please try again.")
+      }
+    } catch (error) {
+      console.error("Error adding expense:", error)
+      alert("Failed to add expense. Please try again.")
+    } finally {
+      setIsAddingExpense(false)
+    }
+  }
+
+  const handleUpdateExpense = async () => {
+    if (!selectedExpense || !newExpense.description || !newExpense.amount || !newExpense.category || !newExpense.account) {
+      alert("Please fill in all required fields")
+      return
+    }
+
+    setIsUpdatingExpense(true)
+    try {
+      // Find the account ID based on selected account name
+      const selectedAccount = accounts.find(acc => acc.name === newExpense.account)
+      if (!selectedAccount) {
+        alert("Please select a valid account")
+        setIsUpdatingExpense(false)
+        return
+      }
+
+      const expenseData = {
+        description: newExpense.description,
+        amount: parseFloat(newExpense.amount),
+        type: "EXPENSE",
+        currency: newExpense.currency,
+        date: new Date(newExpense.date).toISOString(),
+        categoryId: "expense-category-1", // Default category for now
+        fromAccountId: selectedAccount.id, // For expenses, money comes from an account
+        recurring: false
+      }
+
+      const response = await fetch(`/api/transactions/${selectedExpense.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(expenseData)
+      })
+
+      if (response.ok) {
+        // Refresh expenses list and account balances
+        fetchExpenses()
+        fetchAccounts()
+        setNewExpense({
+          description: "",
+          amount: "",
+          category: "",
+          account: "",
+          date: new Date().toISOString().split('T')[0],
+          notes: "",
+          currency: "LKR"
+        })
+        setSelectedExpense(null)
+        setShowEditForm(false)
+      } else {
+        const errorData = await response.json()
+        console.error("Failed to update expense:", errorData)
+        alert("Failed to update expense. Please try again.")
+      }
+    } catch (error) {
+      console.error("Error updating expense:", error)
+      alert("Failed to update expense. Please try again.")
+    } finally {
+      setIsUpdatingExpense(false)
+    }
+  }
+
+  const exportExpenses = () => {
+    const csvContent = [
+      // CSV Header
+      'Date,Description,Category,Amount,Account,Notes',
+      // CSV Data
+      ...filteredAndSortedExpenses.map(expense => [
+        expense.date,
+        `"${expense.description}"`,
+        `"${expense.category}"`,
+        expense.amount,
+        `"${expense.account}"`,
+        `"${expense.notes || ''}"`
+      ].join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `expenses_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const getCategoryColor = (category: string) => {
     const colors: { [key: string]: string } = {
       "Food & Dining": "bg-orange-100 text-orange-800 border-orange-200",
@@ -235,11 +416,11 @@ export default function ExpensesPage() {
             </p>
           </div>
           <div className="flex space-x-2">
-            <Button variant="outline">
+            <Button variant="outline" onClick={exportExpenses}>
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
-            <Button>
+            <Button onClick={() => setShowAddForm(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Add Expense
             </Button>
@@ -447,11 +628,14 @@ export default function ExpensesPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEditExpense(expense)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-red-600">
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteExpense(expense)}
+                                className="text-red-600 focus:text-red-600"
+                              >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete
                               </DropdownMenuItem>
@@ -472,6 +656,261 @@ export default function ExpensesPage() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Add Expense Dialog */}
+        <Dialog open={showAddForm} onOpenChange={setShowAddForm}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Add New Expense</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="description">Description *</Label>
+                <Input
+                  id="description"
+                  placeholder="e.g., Grocery Shopping"
+                  value={newExpense.description}
+                  onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="amount">Amount *</Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={newExpense.amount}
+                    onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="currency">Currency *</Label>
+                  <Select value={newExpense.currency} onValueChange={(value) => setNewExpense({ ...newExpense, currency: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LKR">LKR - Sri Lankan Rupee</SelectItem>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category *</Label>
+                  <Select value={newExpense.category} onValueChange={(value) => setNewExpense({ ...newExpense, category: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Food & Dining">Food & Dining</SelectItem>
+                      <SelectItem value="Transportation">Transportation</SelectItem>
+                      <SelectItem value="Shopping">Shopping</SelectItem>
+                      <SelectItem value="Utilities">Utilities</SelectItem>
+                      <SelectItem value="Healthcare">Healthcare</SelectItem>
+                      <SelectItem value="Entertainment">Entertainment</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="account">Account</Label>
+                  <Select value={newExpense.account} onValueChange={(value) => setNewExpense({ ...newExpense, account: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map(account => (
+                        <SelectItem key={account.id} value={account.name}>
+                          {account.name} ({account.currency} {account.balance.toFixed(2)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="date">Date</Label>
+                  <Input
+                    id="date"
+                    type="date"
+                    value={newExpense.date}
+                    onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  placeholder="Additional notes (optional)"
+                  value={newExpense.notes}
+                  onChange={(e) => setNewExpense({ ...newExpense, notes: e.target.value })}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => setShowAddForm(false)} disabled={isAddingExpense}>
+                  Cancel
+                </Button>
+                <Button onClick={handleAddExpense} disabled={isAddingExpense}>
+                  {isAddingExpense ? "Adding..." : "Add Expense"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Expense Dialog */}
+        <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Edit Expense</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description *</Label>
+                <Input
+                  id="edit-description"
+                  placeholder="e.g., Grocery Shopping"
+                  value={newExpense.description}
+                  onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-amount">Amount *</Label>
+                  <Input
+                    id="edit-amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={newExpense.amount}
+                    onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-currency">Currency *</Label>
+                  <Select value={newExpense.currency} onValueChange={(value) => setNewExpense({ ...newExpense, currency: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LKR">LKR - Sri Lankan Rupee</SelectItem>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Category *</Label>
+                  <Select value={newExpense.category} onValueChange={(value) => setNewExpense({ ...newExpense, category: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Food & Dining">Food & Dining</SelectItem>
+                      <SelectItem value="Transportation">Transportation</SelectItem>
+                      <SelectItem value="Shopping">Shopping</SelectItem>
+                      <SelectItem value="Utilities">Utilities</SelectItem>
+                      <SelectItem value="Healthcare">Healthcare</SelectItem>
+                      <SelectItem value="Entertainment">Entertainment</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-account">Account</Label>
+                  <Select value={newExpense.account} onValueChange={(value) => setNewExpense({ ...newExpense, account: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map(account => (
+                        <SelectItem key={account.id} value={account.name}>
+                          {account.name} ({account.currency} {account.balance.toFixed(2)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-date">Date</Label>
+                  <Input
+                    id="edit-date"
+                    type="date"
+                    value={newExpense.date}
+                    onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Textarea
+                  id="edit-notes"
+                  placeholder="Additional notes (optional)"
+                  value={newExpense.notes}
+                  onChange={(e) => setNewExpense({ ...newExpense, notes: e.target.value })}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => {
+                  setShowEditForm(false)
+                  setSelectedExpense(null)
+                  setNewExpense({
+                    description: "",
+                    amount: "",
+                    category: "",
+                    account: "",
+                    date: new Date().toISOString().split('T')[0],
+                    notes: "",
+                    currency: "LKR"
+                  })
+                }} disabled={isUpdatingExpense}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUpdateExpense} disabled={isUpdatingExpense}>
+                  {isUpdatingExpense ? "Updating..." : "Update Expense"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={confirmDeleteExpense}
+          title="Delete Expense"
+          description={`Are you sure you want to delete the expense "${selectedExpense?.description}"? This action cannot be undone.`}
+          itemName={selectedExpense?.description}
+          isLoading={isDeleting}
+        />
       </div>
     </DashboardLayout>
   )

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import TransactionForm from "./transaction-form"
 import { Edit, Trash2, Plus, Search, Filter } from "lucide-react"
+import { formatCurrency } from "@/lib/currency"
 import { format } from "date-fns"
 
 interface TransactionListProps {
@@ -124,6 +125,7 @@ export default function TransactionList({ onTransactionUpdate }: TransactionList
                 onSubmit={handleTransactionSubmit}
                 onCancel={() => setShowForm(false)}
                 categories={categories}
+                standalone={false}
               />
             </DialogContent>
           </Dialog>
@@ -211,7 +213,7 @@ export default function TransactionList({ onTransactionUpdate }: TransactionList
                   <TableCell className={`text-right font-medium ${
                     transaction.type === "INCOME" ? "text-green-600" : "text-red-600"
                   }`}>
-                    {transaction.type === "INCOME" ? "+" : "-"}{Math.abs(transaction.amount).toFixed(2)} {transaction.currency}
+                    {transaction.type === "INCOME" ? "+" : ""}{formatCurrency(transaction.amount, transaction.currency || "LKR")}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -234,6 +236,7 @@ export default function TransactionList({ onTransactionUpdate }: TransactionList
                             onCancel={() => setEditingTransaction(null)}
                             initialData={editingTransaction}
                             categories={categories}
+                            standalone={false}
                           />
                         </DialogContent>
                       </Dialog>

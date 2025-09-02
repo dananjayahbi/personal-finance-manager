@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -13,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import DeleteConfirmationModal from "@/components/delete-confirmation-modal"
 import { motion } from "framer-motion"
 import {
   Plus,
@@ -24,6 +26,7 @@ import {
   XCircle,
   MoreHorizontal,
   Edit,
+  RotateCcw,
   Trash2,
   DollarSign,
   CalendarDays,
@@ -43,138 +46,299 @@ interface Bill {
   isRecurring: boolean
   description?: string
   daysUntilDue: number
+  account?: string
+  accountId?: string
+  transactionId?: string
 }
 
 export default function BillsPage() {
   const [bills, setBills] = useState<Bill[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [selectedBill, setSelectedBill] = useState<Bill | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isAddingBill, setIsAddingBill] = useState(false)
+  const [isUpdatingBill, setIsUpdatingBill] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>()
+  const [accounts, setAccounts] = useState<any[]>([])
+  const [categories, setCategories] = useState<any[]>([])
   const [newBill, setNewBill] = useState({
     name: "",
-    amount: 0,
-    currency: "USD",
+    amount: "",
+    currency: "LKR",
     dueDate: new Date(),
     frequency: "MONTHLY",
-    category: "",
+    category: "none",
     description: "",
-    isRecurring: true
+    isRecurring: true,
+    account: ""
   })
 
   useEffect(() => {
     fetchBills()
+    fetchAccounts()
+    fetchCategories()
   }, [])
 
   const fetchBills = async () => {
-    // Mock data for demonstration
-    const today = new Date()
-    const mockBills: Bill[] = [
-      {
-        id: "1",
-        name: "Rent Payment",
-        amount: 1200.00,
-        currency: "USD",
-        dueDate: new Date(today.getFullYear(), today.getMonth(), 1),
-        frequency: "MONTHLY",
-        category: "Housing",
-        isPaid: true,
-        isRecurring: true,
-        description: "Monthly apartment rent",
-        daysUntilDue: -27
-      },
-      {
-        id: "2",
-        name: "Electric Bill",
-        amount: 89.20,
-        currency: "USD",
-        dueDate: new Date(today.getFullYear(), today.getMonth(), 15),
-        frequency: "MONTHLY",
-        category: "Utilities",
-        isPaid: false,
-        isRecurring: true,
-        description: "Monthly electricity bill",
-        daysUntilDue: -13
-      },
-      {
-        id: "3",
-        name: "Internet Service",
-        amount: 65.99,
-        currency: "USD",
-        dueDate: new Date(today.getFullYear(), today.getMonth(), 20),
-        frequency: "MONTHLY",
-        category: "Utilities",
-        isPaid: false,
-        isRecurring: true,
-        description: "High-speed internet",
-        daysUntilDue: -8
-      },
-      {
-        id: "4",
-        name: "Car Insurance",
-        amount: 145.50,
-        currency: "USD",
-        dueDate: new Date(today.getFullYear(), today.getMonth() + 1, 5),
-        frequency: "MONTHLY",
-        category: "Insurance",
-        isPaid: false,
-        isRecurring: true,
-        description: "Auto insurance premium",
-        daysUntilDue: 8
-      },
-      {
-        id: "5",
-        name: "Netflix Subscription",
-        amount: 15.99,
-        currency: "USD",
-        dueDate: new Date(today.getFullYear(), today.getMonth() + 1, 12),
-        frequency: "MONTHLY",
-        category: "Entertainment",
-        isPaid: false,
-        isRecurring: true,
-        description: "Streaming service",
-        daysUntilDue: 15
-      },
-      {
-        id: "6",
-        name: "Gym Membership",
-        amount: 45.00,
-        currency: "USD",
-        dueDate: new Date(today.getFullYear(), today.getMonth() + 1, 18),
-        frequency: "MONTHLY",
-        category: "Health & Fitness",
-        isPaid: false,
-        isRecurring: true,
-        description: "Monthly gym membership",
-        daysUntilDue: 21
+    try {
+      const response = await fetch('/api/bills')
+      const data = await response.json()
+      
+      if (response.ok) {
+        // Calculate days until due for each bill
+        const billsWithDaysCalculated = data.bills.map((bill: any) => {
+          const today = new Date()
+          const dueDate = new Date(bill.dueDate)
+          const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+          
+          return {
+            ...bill,
+            dueDate,
+            daysUntilDue,
+            category: bill.category?.name || "",
+            account: bill.account?.name || ""
+          }
+        })
+        setBills(billsWithDaysCalculated)
+      } else {
+        console.error('Failed to fetch bills:', data.error)
+        // Fall back to mock data if needed
+        setBills([])
       }
-    ]
-    setBills(mockBills)
+    } catch (error) {
+      console.error('Error fetching bills:', error)
+      setBills([])
+    }
+  }
+
+  const fetchAccounts = async () => {
+    try {
+      const response = await fetch('/api/accounts')
+      const data = await response.json()
+      
+      if (response.ok) {
+        setAccounts(data.accounts)
+      } else {
+        console.error('Failed to fetch accounts:', data.error)
+        setAccounts([])
+      }
+    } catch (error) {
+      console.error('Error fetching accounts:', error)
+      setAccounts([])
+    }
+  }
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/categories', {
+        headers: {
+          'x-user-id': 'user-1'
+        }
+      })
+      const data = await response.json()
+      
+      if (response.ok) {
+        setCategories(data.categories)
+      } else {
+        console.error('Failed to fetch categories:', data.error)
+        setCategories([])
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+      setCategories([])
+    }
   }
 
   const handleAddBill = async () => {
-    const bill: Bill = {
-      id: Date.now().toString(),
-      ...newBill,
-      isPaid: false,
-      daysUntilDue: Math.ceil((newBill.dueDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    setIsAddingBill(true)
+    try {
+      const billData = {
+        name: newBill.name,
+        amount: parseFloat(newBill.amount) || 0,
+        currency: newBill.currency,
+        dueDate: newBill.dueDate.toISOString(),
+        frequency: newBill.frequency,
+        categoryName: newBill.category === "none" || !newBill.category ? null : newBill.category,
+        accountId: newBill.account && newBill.account.trim() !== "" ? newBill.account : null,
+        description: newBill.description,
+        isRecurring: newBill.isRecurring
+      }
+
+      const response = await fetch('/api/bills', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'user-1'
+        },
+        body: JSON.stringify(billData)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Refresh bills list
+        fetchBills()
+        setNewBill({
+          name: "",
+          amount: "",
+          currency: "LKR",
+          dueDate: new Date(),
+          frequency: "MONTHLY",
+          category: "none",
+          description: "",
+          isRecurring: true,
+          account: ""
+        })
+        setShowAddForm(false)
+      } else {
+        console.error('Failed to add bill:', data.error)
+        alert('Failed to add bill. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error adding bill:', error)
+      alert('Failed to add bill. Please try again.')
+    } finally {
+      setIsAddingBill(false)
     }
-    setBills([...bills, bill])
-    setNewBill({
-      name: "",
-      amount: 0,
-      currency: "USD",
-      dueDate: new Date(),
-      frequency: "MONTHLY",
-      category: "",
-      description: "",
-      isRecurring: true
-    })
-    setShowAddForm(false)
   }
 
-  const toggleBillPaid = (billId: string) => {
-    setBills(bills.map(bill => 
-      bill.id === billId ? { ...bill, isPaid: !bill.isPaid } : bill
-    ))
+  const toggleBillPaid = async (billId: string) => {
+    try {
+      const bill = bills.find(b => b.id === billId)
+      if (!bill) return
+
+      const response = await fetch(`/api/bills/${billId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'user-1'
+        },
+        body: JSON.stringify({
+          isPaid: !bill.isPaid
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Update the bill in the local state
+        setBills(bills.map(b => 
+          b.id === billId ? { ...b, isPaid: !b.isPaid } : b
+        ))
+      } else {
+        console.error('Failed to update bill:', data.error)
+      }
+    } catch (error) {
+      console.error('Error updating bill:', error)
+    }
+  }
+
+  const handleEditBill = (bill: Bill) => {
+    setSelectedBill(bill)
+    setNewBill({
+      name: bill.name,
+      amount: bill.amount.toString(),
+      currency: bill.currency,
+      dueDate: bill.dueDate,
+      frequency: bill.frequency,
+      category: bill.category || "none",
+      description: bill.description || "",
+      isRecurring: bill.isRecurring,
+      account: bill.accountId || ""
+    })
+    setShowEditForm(true)
+  }
+
+  const handleUpdateBill = async () => {
+    if (!selectedBill) return
+    
+    setIsUpdatingBill(true)
+    try {
+      const billData = {
+        name: newBill.name,
+        amount: parseFloat(newBill.amount) || 0,
+        currency: newBill.currency,
+        dueDate: newBill.dueDate.toISOString(),
+        frequency: newBill.frequency,
+        categoryName: newBill.category === "none" || !newBill.category ? null : newBill.category,
+        accountId: newBill.account && newBill.account.trim() !== "" ? newBill.account : null,
+        description: newBill.description,
+        isRecurring: newBill.isRecurring
+      }
+
+      const response = await fetch(`/api/bills/${selectedBill.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'user-1'
+        },
+        body: JSON.stringify(billData)
+      })
+
+      if (response.ok) {
+        // Refresh bills list
+        fetchBills()
+        setSelectedBill(null)
+        setNewBill({
+          name: "",
+          amount: "",
+          currency: "LKR",
+          dueDate: new Date(),
+          frequency: "MONTHLY",
+          category: "none",
+          description: "",
+          isRecurring: true,
+          account: ""
+        })
+        setShowEditForm(false)
+      } else {
+        const errorData = await response.json()
+        console.error('Failed to update bill:', errorData.error)
+        alert('Failed to update bill. Please try again.')
+      }
+    } catch (error) {
+      console.error("Error updating bill:", error)
+      alert('Failed to update bill. Please try again.')
+    } finally {
+      setIsUpdatingBill(false)
+    }
+  }
+
+  const handleDeleteBill = (bill: Bill) => {
+    setSelectedBill(bill)
+    setShowDeleteModal(true)
+  }
+
+  const confirmDeleteBill = async () => {
+    if (!selectedBill) return
+    
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/bills/${selectedBill.id}`, {
+        method: 'DELETE',
+        headers: {
+          'x-user-id': 'user-1'
+        }
+      })
+
+      if (response.ok) {
+        // Refresh bills list
+        fetchBills()
+        setSelectedBill(null)
+        setShowDeleteModal(false)
+      } else {
+        const errorData = await response.json()
+        console.error('Failed to delete bill:', errorData.error)
+        alert('Failed to delete bill. Please try again.')
+      }
+    } catch (error) {
+      console.error("Failed to delete bill:", error)
+      alert('Failed to delete bill. Please try again.')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   const getBillStatus = (bill: Bill) => {
@@ -336,9 +500,11 @@ export default function BillsPage() {
                               {bill.name}
                             </h3>
                             <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                              <Badge variant="outline" className="text-xs">
-                                {bill.category}
-                              </Badge>
+                              {bill.category && (
+                                <Badge variant="outline" className="text-xs">
+                                  {bill.category}
+                                </Badge>
+                              )}
                               {bill.isRecurring && (
                                 <Badge variant="secondary" className="text-xs">
                                   {bill.frequency}
@@ -369,9 +535,42 @@ export default function BillsPage() {
                           </span>
                         </Badge>
 
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {bill.isPaid ? (
+                              <>
+                                <DropdownMenuItem 
+                                  onClick={() => toggleBillPaid(bill.id)}
+                                  className="text-orange-600 focus:text-orange-600"
+                                >
+                                  <RotateCcw className="mr-2 h-4 w-4" />
+                                  Undo Execution
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled className="opacity-50">
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit (Undo first)
+                                </DropdownMenuItem>
+                              </>
+                            ) : (
+                              <DropdownMenuItem onClick={() => handleEditBill(bill)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteBill(bill)}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
 
@@ -431,7 +630,7 @@ export default function BillsPage() {
                     type="number"
                     step="0.01"
                     value={newBill.amount}
-                    onChange={(e) => setNewBill({...newBill, amount: parseFloat(e.target.value) || 0})}
+                    onChange={(e) => setNewBill({...newBill, amount: e.target.value})}
                     placeholder="0.00"
                   />
                 </div>
@@ -446,12 +645,32 @@ export default function BillsPage() {
                       <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="GBP">GBP</SelectItem>
+                      <SelectItem value="LKR">LKR - Sri Lankan Rupee</SelectItem>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="account">Account</Label>
+                <Select
+                  value={newBill.account}
+                  onValueChange={(value) => setNewBill({...newBill, account: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map(account => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name} ({account.currency} {account.balance.toFixed(2)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid gap-2">
@@ -496,12 +715,35 @@ export default function BillsPage() {
 
                 <div className="grid gap-2">
                   <Label htmlFor="category">Category</Label>
-                  <Input
-                    id="category"
+                  <Select
                     value={newBill.category}
-                    onChange={(e) => setNewBill({...newBill, category: e.target.value})}
-                    placeholder="e.g., Utilities"
-                  />
+                    onValueChange={(value) => setNewBill({...newBill, category: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {/* Default categories */}
+                      <SelectItem value="none">No Category</SelectItem>
+                      <SelectItem value="Utilities">Utilities</SelectItem>
+                      <SelectItem value="Rent">Rent</SelectItem>
+                      <SelectItem value="Insurance">Insurance</SelectItem>
+                      <SelectItem value="Internet">Internet</SelectItem>
+                      <SelectItem value="Phone">Phone</SelectItem>
+                      <SelectItem value="Subscriptions">Subscriptions</SelectItem>
+                      <SelectItem value="Loan Payments">Loan Payments</SelectItem>
+                      <SelectItem value="Credit Card">Credit Card</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                      {/* Database categories */}
+                      {categories.filter(category => 
+                        !['Utilities', 'Rent', 'Insurance', 'Internet', 'Phone', 'Subscriptions', 'Loan Payments', 'Credit Card', 'Other'].includes(category.name)
+                      ).map((category) => (
+                        <SelectItem key={category.id} value={category.name}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -529,15 +771,205 @@ export default function BillsPage() {
             </div>
             
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowAddForm(false)}>
+              <Button variant="outline" onClick={() => setShowAddForm(false)} disabled={isAddingBill}>
                 Cancel
               </Button>
-              <Button onClick={handleAddBill} disabled={!newBill.name || newBill.amount <= 0}>
-                Add Bill
+              <Button onClick={handleAddBill} disabled={isAddingBill || !newBill.name || !newBill.amount || parseFloat(newBill.amount) <= 0}>
+                {isAddingBill ? "Adding..." : "Add Bill"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Bill Dialog */}
+        <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Edit Bill</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-bill-name">Bill Name</Label>
+                <Input
+                  id="edit-bill-name"
+                  value={newBill.name}
+                  onChange={(e) => setNewBill({...newBill, name: e.target.value})}
+                  placeholder="e.g., Electric Bill"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-amount">Amount</Label>
+                  <Input
+                    id="edit-amount"
+                    type="number"
+                    step="0.01"
+                    value={newBill.amount}
+                    onChange={(e) => setNewBill({...newBill, amount: e.target.value})}
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-currency">Currency</Label>
+                  <Select
+                    value={newBill.currency}
+                    onValueChange={(value) => setNewBill({...newBill, currency: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LKR">LKR - Sri Lankan Rupee</SelectItem>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="edit-account">Account</Label>
+                <Select
+                  value={newBill.account}
+                  onValueChange={(value) => setNewBill({...newBill, account: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map(account => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name} ({account.currency} {account.balance.toFixed(2)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Due Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {format(newBill.dueDate, "PPP")}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={newBill.dueDate}
+                      onSelect={(date) => date && setNewBill({...newBill, dueDate: date})}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-frequency">Frequency</Label>
+                  <Select
+                    value={newBill.frequency}
+                    onValueChange={(value) => setNewBill({...newBill, frequency: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="WEEKLY">Weekly</SelectItem>
+                      <SelectItem value="BIWEEKLY">Bi-weekly</SelectItem>
+                      <SelectItem value="MONTHLY">Monthly</SelectItem>
+                      <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+                      <SelectItem value="YEARLY">Yearly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-category">Category</Label>
+                  <Select
+                    value={newBill.category}
+                    onValueChange={(value) => setNewBill({...newBill, category: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {/* Default categories */}
+                      <SelectItem value="none">No Category</SelectItem>
+                      <SelectItem value="Utilities">Utilities</SelectItem>
+                      <SelectItem value="Rent">Rent</SelectItem>
+                      <SelectItem value="Insurance">Insurance</SelectItem>
+                      <SelectItem value="Internet">Internet</SelectItem>
+                      <SelectItem value="Phone">Phone</SelectItem>
+                      <SelectItem value="Subscriptions">Subscriptions</SelectItem>
+                      <SelectItem value="Loan Payments">Loan Payments</SelectItem>
+                      <SelectItem value="Credit Card">Credit Card</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                      {/* Database categories */}
+                      {categories.filter(category => 
+                        !['Utilities', 'Rent', 'Insurance', 'Internet', 'Phone', 'Subscriptions', 'Loan Payments', 'Credit Card', 'Other'].includes(category.name)
+                      ).map((category) => (
+                        <SelectItem key={category.id} value={category.name}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="edit-description">Description (Optional)</Label>
+                <Textarea
+                  id="edit-description"
+                  value={newBill.description}
+                  onChange={(e) => setNewBill({...newBill, description: e.target.value})}
+                  placeholder="Add notes about this bill..."
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="edit-recurring"
+                  checked={newBill.isRecurring}
+                  onCheckedChange={(checked) => 
+                    setNewBill({...newBill, isRecurring: checked as boolean})
+                  }
+                />
+                <Label htmlFor="edit-recurring">This is a recurring bill</Label>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowEditForm(false)} disabled={isUpdatingBill}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateBill} disabled={isUpdatingBill || !newBill.name || !newBill.amount || parseFloat(newBill.amount) <= 0}>
+                {isUpdatingBill ? "Updating..." : "Update Bill"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={confirmDeleteBill}
+          title="Delete Bill"
+          description={`Are you sure you want to delete "${selectedBill?.name}"? This action cannot be undone and will remove all payment history.`}
+          itemName={selectedBill?.name}
+          isLoading={isDeleting}
+        />
       </div>
     </DashboardLayout>
   )

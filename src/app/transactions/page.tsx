@@ -1,11 +1,13 @@
 "use client"
 
+import { formatCurrency } from "@/lib/currency"
 import { useState, useEffect } from "react"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -14,6 +16,8 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
 import { motion } from "framer-motion"
+import { useToast } from "@/hooks/use-toast"
+import TransactionForm from "@/components/transaction-form"
 import {
   Plus,
   ArrowLeftRight,
@@ -56,13 +60,19 @@ interface Account {
 }
 
 export default function TransactionsPage() {
+  const { toast } = useToast()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [transactionType, setTransactionType] = useState<"TRANSFER" | "INCOME" | "EXPENSE">("TRANSFER")
+  const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showClearAllDialog, setShowClearAllDialog] = useState(false)
   const [newTransaction, setNewTransaction] = useState({
-    amount: 0,
-    currency: "USD",
+    amount: "",
+    currency: "LKR",
     description: "",
     fromAccount: "",
     toAccount: "",
@@ -72,123 +82,348 @@ export default function TransactionsPage() {
   })
 
   useEffect(() => {
-    fetchTransactions()
-    fetchAccounts()
+    const loadData = async () => {
+      await fetchAccounts()
+      await fetchTransactions()
+    }
+    loadData()
   }, [])
 
+  // Refetch transactions when accounts data is available
+  useEffect(() => {
+    if (accounts.length > 0) {
+      fetchTransactions()
+    }
+  }, [accounts])
+
   const fetchAccounts = async () => {
-    // Mock accounts data
-    const mockAccounts: Account[] = [
-      { id: "1", name: "Main Checking", type: "BANK", balance: 5420.50 },
-      { id: "2", name: "Savings Account", type: "SAVINGS", balance: 12500.00 },
-      { id: "3", name: "Cash Wallet", type: "CASH", balance: 280.00 },
-      { id: "4", name: "Credit Card", type: "CREDIT_CARD", balance: -1250.75 }
-    ]
-    setAccounts(mockAccounts)
+    try {
+      const response = await fetch('/api/accounts')
+      const data = await response.json()
+      
+      if (response.ok) {
+        setAccounts(data.accounts)
+      } else {
+        console.error('Failed to fetch accounts:', data.error)
+        // Fall back to mock data
+        const mockAccounts: Account[] = [
+          { id: "1", name: "Main Checking", type: "BANK", balance: 5420.50 },
+          { id: "2", name: "Savings Account", type: "SAVINGS", balance: 12500.00 },
+          { id: "3", name: "Cash Wallet", type: "CASH", balance: 280.00 },
+          { id: "4", name: "Credit Card", type: "CREDIT_CARD", balance: -1250.75 }
+        ]
+        setAccounts(mockAccounts)
+      }
+    } catch (error) {
+      console.error('Error fetching accounts:', error)
+    }
   }
 
   const fetchTransactions = async () => {
-    // Mock data for demonstration
-    const mockTransactions: Transaction[] = [
-      {
-        id: "1",
-        type: "TRANSFER",
-        amount: 500.00,
-        currency: "USD",
-        description: "Monthly savings transfer",
-        fromAccount: "Main Checking",
-        toAccount: "Savings Account",
-        scheduledDate: new Date(2025, 8, 30),
-        executedDate: new Date(2025, 8, 30),
-        frequency: "monthly",
-        isScheduled: true,
-        isExecuted: true
-      },
-      {
-        id: "2",
-        type: "TRANSFER",
-        amount: 1000.00,
-        currency: "USD",
-        description: "Emergency fund contribution",
-        fromAccount: "Main Checking",
-        toAccount: "Savings Account",
-        scheduledDate: new Date(2025, 9, 1),
-        frequency: "once",
-        isScheduled: true,
-        isExecuted: false
-      },
-      {
-        id: "3",
-        type: "TRANSFER",
-        amount: 200.00,
-        currency: "USD",
-        description: "Cash withdrawal for weekend",
-        fromAccount: "Main Checking",
-        toAccount: "Cash Wallet",
-        scheduledDate: new Date(2025, 8, 29),
-        executedDate: new Date(2025, 8, 29),
-        frequency: "weekly",
-        isScheduled: true,
-        isExecuted: true
-      },
-      {
-        id: "4",
-        type: "TRANSFER",
-        amount: 300.00,
-        currency: "USD",
-        description: "Credit card payment",
-        fromAccount: "Main Checking",
-        toAccount: "Credit Card",
-        scheduledDate: new Date(2025, 9, 5),
-        frequency: "monthly",
-        isScheduled: true,
-        isExecuted: false
-      },
-      {
-        id: "5",
-        type: "TRANSFER",
-        amount: 150.00,
-        currency: "USD",
-        description: "Investment account funding",
-        fromAccount: "Savings Account",
-        toAccount: "Investment Portfolio",
-        scheduledDate: new Date(2025, 9, 10),
-        frequency: "monthly",
-        isScheduled: true,
-        isExecuted: false
+    try {
+      const response = await fetch('/api/scheduled-transactions')
+      const data = await response.json()
+      
+      if (response.ok) {
+        // Convert API scheduled transactions to the format expected by the page
+        const convertedTransactions: Transaction[] = data.scheduledTransactions.map((tx: any) => {
+          // Find account names from the accounts array
+          const fromAccount = tx.fromAccountId ? accounts.find(acc => acc.id === tx.fromAccountId) : null
+          const toAccount = tx.toAccountId ? accounts.find(acc => acc.id === tx.toAccountId) : null
+          
+          return {
+            id: tx.id,
+            type: tx.type || "TRANSFER",
+            amount: tx.amount,
+            currency: tx.currency,
+            description: tx.description,
+            fromAccount: fromAccount?.name || "",
+            toAccount: toAccount?.name || "",
+            scheduledDate: new Date(tx.scheduledDate),
+            executedDate: tx.executedDate ? new Date(tx.executedDate) : undefined,
+            frequency: tx.frequency || "once",
+            isScheduled: true,
+            isExecuted: tx.isExecuted,
+            category: ""
+          }
+        })
+        setTransactions(convertedTransactions)
+      } else {
+        console.error('Failed to fetch transactions:', data.error)
+        // Fall back to mock data if needed
       }
-    ]
-    setTransactions(mockTransactions)
+    } catch (error) {
+      console.error('Error fetching transactions:', error)
+    }
   }
 
   const handleAddTransaction = async () => {
-    const transaction: Transaction = {
-      id: Date.now().toString(),
-      type: transactionType,
-      ...newTransaction,
-      isScheduled: true,
-      isExecuted: false
+    try {
+      let fromAccount, toAccount;
+
+      if (transactionType === "TRANSFER") {
+        // Find account IDs based on selected account names
+        fromAccount = accounts.find(acc => acc.name === newTransaction.fromAccount)
+        toAccount = accounts.find(acc => acc.name === newTransaction.toAccount)
+
+        if (!fromAccount || !toAccount) {
+          toast({
+            title: "Error",
+            description: "Please select both from and to accounts",
+            variant: "destructive",
+          })
+          return
+        }
+      } else if (transactionType === "INCOME") {
+        // For income, we only need a destination account
+        toAccount = accounts.find(acc => acc.name === newTransaction.toAccount)
+        
+        if (!toAccount) {
+          toast({
+            title: "Error",
+            description: "Please select an account to deposit income",
+            variant: "destructive",
+          })
+          return
+        }
+      } else if (transactionType === "EXPENSE") {
+        // For expense, we only need a source account
+        fromAccount = accounts.find(acc => acc.name === newTransaction.fromAccount)
+        
+        if (!fromAccount) {
+          toast({
+            title: "Error",
+            description: "Please select an account to pay from",
+            variant: "destructive",
+          })
+          return
+        }
+      }
+
+      const transactionData = {
+        description: newTransaction.description,
+        amount: parseFloat(newTransaction.amount) || 0,
+        currency: newTransaction.currency,
+        type: transactionType,
+        fromAccountId: fromAccount?.id || null,
+        toAccountId: toAccount?.id || null,
+        scheduledDate: newTransaction.scheduledDate.toISOString(),
+        frequency: newTransaction.frequency
+      }
+
+      const response = await fetch('/api/scheduled-transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'user-1'
+        },
+        body: JSON.stringify(transactionData)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Refresh transactions list
+        fetchTransactions()
+        setNewTransaction({
+          amount: "",
+          currency: "LKR",
+          description: "",
+          fromAccount: "",
+          toAccount: "",
+          scheduledDate: new Date(),
+          frequency: "once",
+          category: ""
+        })
+        setShowAddForm(false)
+        toast({
+          title: "Success",
+          description: "Transaction scheduled successfully",
+        })
+      } else {
+        console.error('Failed to add transaction:', data.error)
+        toast({
+          title: "Error",
+          description: data.error || "Failed to schedule transaction",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error adding transaction:', error)
+      toast({
+        title: "Error",
+        description: "Failed to schedule transaction",
+        variant: "destructive",
+      })
     }
-    setTransactions([...transactions, transaction])
-    setNewTransaction({
-      amount: 0,
-      currency: "USD",
-      description: "",
-      fromAccount: "",
-      toAccount: "",
-      scheduledDate: new Date(),
-      frequency: "once",
-      category: ""
-    })
-    setShowAddForm(false)
   }
 
-  const executeTransaction = (transactionId: string) => {
-    setTransactions(transactions.map(transaction => 
-      transaction.id === transactionId 
-        ? { ...transaction, isExecuted: true, executedDate: new Date() }
-        : transaction
-    ))
+  const handleEdit = (transaction: Transaction) => {
+    // Check if transaction is executed
+    if (transaction.isExecuted) {
+      toast({
+        title: "Cannot Edit Executed Transaction",
+        description: "Please undo the execution first before editing this transaction.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSelectedTransaction(transaction)
+    setTransactionType(transaction.type)
+    setShowEditForm(true)
+  }
+
+  const handleEditSuccess = () => {
+    setShowEditForm(false)
+    setSelectedTransaction(null)
+    fetchTransactions()
+  }
+
+  const executeTransaction = async (transactionId: string) => {
+    try {
+      const response = await fetch(`/api/scheduled-transactions/${transactionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'user-1'
+        },
+        body: JSON.stringify({ action: 'execute' })
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Transaction executed successfully",
+        })
+        // Refresh both accounts and transactions to show updated balances
+        await fetchAccounts()
+        await fetchTransactions()
+      } else {
+        const data = await response.json()
+        toast({
+          title: "Error",
+          description: data.error || "Failed to execute transaction",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error executing transaction:', error)
+      toast({
+        title: "Error",
+        description: "Failed to execute transaction",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const reverseExecution = async (transactionId: string) => {
+    try {
+      // Show confirmation dialog
+      const confirmed = window.confirm(
+        "Are you sure you want to undo this transaction? This will reverse the account balance changes and allow you to edit the transaction."
+      )
+      
+      if (!confirmed) return
+
+      const response = await fetch(`/api/scheduled-transactions/${transactionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'user-1'
+        },
+        body: JSON.stringify({ action: 'undo' })
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Transaction execution undone successfully. You can now edit it.",
+        })
+        // Refresh both accounts and transactions to show updated balances
+        await fetchAccounts()
+        await fetchTransactions()
+      } else {
+        const data = await response.json()
+        toast({
+          title: "Error",
+          description: data.error || "Failed to undo transaction",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error undoing transaction:', error)
+      toast({
+        title: "Error",
+        description: "Failed to undo transaction",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    try {
+      const response = await fetch(`/api/scheduled-transactions/${transactionId}`, {
+        method: 'DELETE',
+        headers: {
+          'x-user-id': 'user-1'
+        }
+      })
+
+      if (response.ok) {
+        setTransactions(transactions.filter(t => t.id !== transactionId))
+        toast({
+          title: "Success",
+          description: "Transaction deleted successfully",
+        })
+      } else {
+        const data = await response.json()
+        toast({
+          title: "Error",
+          description: data.error || "Failed to delete transaction",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error deleting transaction:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete transaction",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const exportTransactions = () => {
+    const csvContent = [
+      // CSV Header
+      'Date,Type,Description,Amount,Currency,Status,Category,From Account,To Account',
+      // CSV Data
+      ...transactions.map(transaction => {
+        const date = transaction.scheduledDate
+        return [
+          date ? format(date, 'yyyy-MM-dd') : '',
+          transaction.type,
+          `"${transaction.description}"`,
+          transaction.amount,
+          transaction.currency,
+          getStatusText(transaction),
+          `"${transaction.category || ''}"`,
+          `"${transaction.fromAccount || ''}"`,
+          `"${transaction.toAccount || ''}"`
+        ].join(',')
+      })
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `transactions_${format(new Date(), 'yyyy-MM-dd')}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   const getTransactionIcon = (type: string) => {
@@ -204,6 +439,77 @@ export default function TransactionsPage() {
     }
   }
 
+  const handleSelectTransaction = (transactionId: string) => {
+    setSelectedTransactions(prev => 
+      prev.includes(transactionId)
+        ? prev.filter(id => id !== transactionId)
+        : [...prev, transactionId]
+    )
+  }
+
+  const handleSelectAll = () => {
+    if (selectedTransactions.length === transactions.length) {
+      setSelectedTransactions([])
+    } else {
+      setSelectedTransactions(transactions.map(t => t.id))
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    try {
+      // Delete each selected transaction
+      const deletePromises = selectedTransactions.map(id =>
+        fetch(`/api/scheduled-transactions/${id}`, { 
+          method: 'DELETE',
+          headers: {
+            'x-user-id': 'user-1'
+          }
+        })
+      )
+      
+      await Promise.all(deletePromises)
+      
+      // Refresh transactions list
+      fetchTransactions()
+      setSelectedTransactions([])
+      setShowDeleteDialog(false)
+    } catch (error) {
+      console.error('Error deleting transactions:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete selected transactions",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleClearAll = async () => {
+    try {
+      // Get all transaction IDs and delete them
+      const deletePromises = transactions.map(transaction =>
+        fetch(`/api/scheduled-transactions/${transaction.id}`, { 
+          method: 'DELETE',
+          headers: {
+            'x-user-id': 'user-1'
+          }
+        })
+      )
+      
+      await Promise.all(deletePromises)
+      
+      // Refresh transactions list
+      fetchTransactions()
+      setShowClearAllDialog(false)
+    } catch (error) {
+      console.error('Error clearing all transactions:', error)
+      toast({
+        title: "Error",
+        description: "Failed to clear all transactions",
+        variant: "destructive",
+      })
+    }
+  }
+
   const getStatusColor = (transaction: Transaction) => {
     if (transaction.isExecuted) return "bg-green-100 text-green-800 border-green-200"
     if (transaction.scheduledDate && transaction.scheduledDate < new Date()) {
@@ -213,7 +519,10 @@ export default function TransactionsPage() {
   }
 
   const getStatusText = (transaction: Transaction) => {
-    if (transaction.isExecuted) return "Executed"
+    if (transaction.isExecuted) {
+      return "Executed"
+    }
+    
     if (transaction.scheduledDate && transaction.scheduledDate < new Date()) {
       return "Overdue"
     }
@@ -228,16 +537,149 @@ export default function TransactionsPage() {
     return diffDays
   }
 
+  // Bulk action helper functions
+  const getSelectedTransactionStates = () => {
+    const selectedTxns = transactions.filter(t => selectedTransactions.includes(t.id))
+    const executedCount = selectedTxns.filter(t => t.isExecuted).length
+    const nonExecutedCount = selectedTxns.filter(t => !t.isExecuted).length
+    
+    return {
+      total: selectedTxns.length,
+      executed: executedCount,
+      nonExecuted: nonExecutedCount,
+      isMixed: executedCount > 0 && nonExecutedCount > 0,
+      allExecuted: executedCount > 0 && nonExecutedCount === 0,
+      allNonExecuted: nonExecutedCount > 0 && executedCount === 0
+    }
+  }
+
+  const handleBulkExecute = async () => {
+    const selectedTxns = transactions.filter(t => selectedTransactions.includes(t.id) && !t.isExecuted)
+    
+    if (selectedTxns.length === 0) {
+      toast({
+        title: "No Transactions to Execute",
+        description: "Please select non-executed transactions to execute.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to execute ${selectedTxns.length} transaction${selectedTxns.length > 1 ? 's' : ''}? This will update your account balances.`
+    )
+    
+    if (!confirmed) return
+
+    try {
+      // Execute each selected transaction
+      const executePromises = selectedTxns.map(transaction =>
+        fetch(`/api/scheduled-transactions/${transaction.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': 'user-1'
+          },
+          body: JSON.stringify({ action: 'execute' })
+        })
+      )
+      
+      const results = await Promise.all(executePromises)
+      const failed = results.filter(r => !r.ok)
+      
+      if (failed.length === 0) {
+        toast({
+          title: "Success",
+          description: `Successfully executed ${selectedTxns.length} transaction${selectedTxns.length > 1 ? 's' : ''}`,
+        })
+      } else {
+        toast({
+          title: "Partial Success",
+          description: `Executed ${results.length - failed.length} of ${selectedTxns.length} transactions. ${failed.length} failed.`,
+          variant: "destructive",
+        })
+      }
+      
+      // Refresh data and clear selection
+      await fetchAccounts()
+      await fetchTransactions()
+      setSelectedTransactions([])
+    } catch (error) {
+      console.error('Error executing transactions:', error)
+      toast({
+        title: "Error",
+        description: "Failed to execute selected transactions",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleBulkUndo = async () => {
+    const selectedTxns = transactions.filter(t => selectedTransactions.includes(t.id) && t.isExecuted)
+    
+    if (selectedTxns.length === 0) {
+      toast({
+        title: "No Transactions to Undo",
+        description: "Please select executed transactions to undo.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to undo the execution of ${selectedTxns.length} transaction${selectedTxns.length > 1 ? 's' : ''}? This will reverse the account balance changes.`
+    )
+    
+    if (!confirmed) return
+
+    try {
+      // Undo each selected transaction
+      const undoPromises = selectedTxns.map(transaction =>
+        fetch(`/api/scheduled-transactions/${transaction.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': 'user-1'
+          },
+          body: JSON.stringify({ action: 'undo' })
+        })
+      )
+      
+      const results = await Promise.all(undoPromises)
+      const failed = results.filter(r => !r.ok)
+      
+      if (failed.length === 0) {
+        toast({
+          title: "Success",
+          description: `Successfully undone ${selectedTxns.length} transaction${selectedTxns.length > 1 ? 's' : ''}`,
+        })
+      } else {
+        toast({
+          title: "Partial Success",
+          description: `Undone ${results.length - failed.length} of ${selectedTxns.length} transactions. ${failed.length} failed.`,
+          variant: "destructive",
+        })
+      }
+      
+      // Refresh data and clear selection
+      await fetchAccounts()
+      await fetchTransactions()
+      setSelectedTransactions([])
+    } catch (error) {
+      console.error('Error undoing transactions:', error)
+      toast({
+        title: "Error",
+        description: "Failed to undo selected transactions",
+        variant: "destructive",
+      })
+    }
+  }
+
   const totalScheduled = transactions
-    .filter(t => !t.isExecuted)
     .reduce((sum, t) => sum + t.amount, 0)
 
-  const executedThisMonth = transactions
-    .filter(t => t.isExecuted && t.executedDate && t.executedDate.getMonth() === new Date().getMonth())
-    .length
-
   const overdueTransactions = transactions
-    .filter(t => !t.isExecuted && t.scheduledDate && t.scheduledDate < new Date())
+    .filter(t => t.scheduledDate && t.scheduledDate < new Date())
     .length
 
   const recurringTransactions = transactions
@@ -263,20 +705,110 @@ export default function TransactionsPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
             <p className="text-muted-foreground">
-              Manage transfers between accounts and schedule future transactions
+              Schedule transfers, income, and expense transactions for your accounts
             </p>
           </div>
           <div className="flex space-x-2">
-            <Button variant="outline">
+            <Button variant="outline" onClick={exportTransactions}>
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
+            
+            {/* Smart bulk action buttons */}
+            {selectedTransactions.length > 1 && (() => {
+              const selectionState = getSelectedTransactionStates()
+              
+              if (selectionState.isMixed) {
+                // Mixed selection - show disabled button with message
+                return (
+                  <Button 
+                    variant="outline" 
+                    disabled
+                    className="text-muted-foreground"
+                  >
+                    Mixed Selection ({selectionState.total})
+                  </Button>
+                )
+              } else if (selectionState.allNonExecuted) {
+                // All selected are non-executed - show bulk execute
+                return (
+                  <Button 
+                    variant="default"
+                    onClick={handleBulkExecute}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    <ArrowDownLeft className="mr-2 h-4 w-4" />
+                    Execute Selected ({selectionState.total})
+                  </Button>
+                )
+              } else if (selectionState.allExecuted) {
+                // All selected are executed - show bulk undo
+                return (
+                  <Button 
+                    variant="outline"
+                    onClick={handleBulkUndo}
+                    className="text-amber-600 hover:text-amber-700 border-amber-300 hover:bg-amber-50"
+                  >
+                    <ArrowUpRight className="mr-2 h-4 w-4" />
+                    Undo Selected ({selectionState.total})
+                  </Button>
+                )
+              }
+              return null
+            })()}
+
+            {/* Regular delete selected button */}
+            {selectedTransactions.length > 0 && (
+              <Button 
+                variant="destructive" 
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Selected ({selectedTransactions.length})
+              </Button>
+            )}
+            
+            {transactions.length > 0 && (
+              <Button 
+                variant="outline" 
+                className="text-red-600 hover:text-red-700"
+                onClick={() => setShowClearAllDialog(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Clear All
+              </Button>
+            )}
             <Button onClick={() => setShowAddForm(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Schedule Transaction
             </Button>
           </div>
         </motion.div>
+
+        {/* Mixed selection help message */}
+        {selectedTransactions.length > 1 && (() => {
+          const selectionState = getSelectedTransactionStates()
+          if (selectionState.isMixed) {
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center justify-center"
+              >
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800 text-sm">
+                  <div className="flex items-center space-x-2">
+                    <ArrowLeftRight className="h-4 w-4" />
+                    <span>
+                      You have selected both executed and non-executed transactions. 
+                      Please select only executed OR only non-executed transactions to use bulk actions.
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
+            )
+          }
+          return null
+        })()}
 
         {/* Summary Cards */}
         <motion.div
@@ -292,7 +824,7 @@ export default function TransactionsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-700">
-                ${totalScheduled.toFixed(2)}
+                {formatCurrency(totalScheduled, "LKR")}
               </div>
               <p className="text-xs text-blue-600">Pending execution</p>
             </CardContent>
@@ -300,12 +832,12 @@ export default function TransactionsPage() {
 
           <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Executed This Month</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
               <ArrowLeftRight className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-700">{executedThisMonth}</div>
-              <p className="text-xs text-green-600">Completed transactions</p>
+              <div className="text-2xl font-bold text-green-700">{transactions.length}</div>
+              <p className="text-xs text-green-600">All transactions</p>
             </CardContent>
           </Card>
 
@@ -340,8 +872,21 @@ export default function TransactionsPage() {
         >
           <Card className="border-0 shadow-lg">
             <CardHeader>
-              <CardTitle>Scheduled Transfers</CardTitle>
-              <CardDescription>Manage your account transfers and scheduled transactions</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Scheduled Transactions</CardTitle>
+                  <CardDescription>Manage your transfers, income, and expense transactions</CardDescription>
+                </div>
+                {transactions.length > 0 && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      checked={selectedTransactions.length === transactions.length}
+                      onCheckedChange={handleSelectAll}
+                    />
+                    <span className="text-sm text-muted-foreground">Select All</span>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -354,21 +899,46 @@ export default function TransactionsPage() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.3 + index * 0.05 }}
                       className={`flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors ${
-                        transaction.isExecuted ? 'opacity-75' : ''
+                        transaction.isExecuted ? 'opacity-75 bg-gray-50' : ''
                       }`}
                     >
                       <div className="flex items-center space-x-4">
+                        <Checkbox
+                          checked={selectedTransactions.includes(transaction.id)}
+                          onCheckedChange={() => handleSelectTransaction(transaction.id)}
+                        />
                         <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
                           {getTransactionIcon(transaction.type)}
                         </div>
                         <div>
                           <h4 className={`font-medium ${transaction.isExecuted ? 'line-through text-muted-foreground' : ''}`}>
                             {transaction.description}
+                            {transaction.isExecuted && (
+                              <span className="ml-2 text-xs text-amber-600 font-normal">
+                                (Undo execution to edit)
+                              </span>
+                            )}
                           </h4>
                           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                            <span>{transaction.fromAccount}</span>
-                            <ArrowLeftRight className="h-3 w-3" />
-                            <span>{transaction.toAccount}</span>
+                            {transaction.type === "TRANSFER" && (
+                              <>
+                                <span>{transaction.fromAccount}</span>
+                                <ArrowLeftRight className="h-3 w-3" />
+                                <span>{transaction.toAccount}</span>
+                              </>
+                            )}
+                            {transaction.type === "INCOME" && (
+                              <>
+                                <span className="text-green-600">Income to</span>
+                                <span>{transaction.toAccount}</span>
+                              </>
+                            )}
+                            {transaction.type === "EXPENSE" && (
+                              <>
+                                <span className="text-red-600">Expense from</span>
+                                <span>{transaction.fromAccount}</span>
+                              </>
+                            )}
                             {transaction.frequency !== "once" && (
                               <Badge variant="secondary" className="text-xs">
                                 <Repeat className="mr-1 h-3 w-3" />
@@ -382,7 +952,7 @@ export default function TransactionsPage() {
                       <div className="flex items-center space-x-4">
                         <div className="text-right">
                           <div className="text-lg font-bold">
-                            ${transaction.amount.toFixed(2)}
+                            {formatCurrency(transaction.amount, transaction.currency || "LKR")}
                           </div>
                           <div className="text-sm text-muted-foreground">
                             {transaction.isExecuted && transaction.executedDate
@@ -398,20 +968,49 @@ export default function TransactionsPage() {
                           {getStatusText(transaction)}
                         </Badge>
 
-                        {!transaction.isExecuted && (
-                          <div className="flex space-x-2">
-                            <Button
-                              size="sm"
-                              onClick={() => executeTransaction(transaction.id)}
-                              disabled={transaction.isExecuted}
-                            >
-                              Execute Now
-                            </Button>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </div>
+                        {transaction.isExecuted && (
+                          <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
+                            Locked
+                          </Badge>
                         )}
+
+                        <div className="flex space-x-2">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              {!transaction.isExecuted && (
+                                <DropdownMenuItem onClick={() => executeTransaction(transaction.id)}>
+                                  Execute Now
+                                </DropdownMenuItem>
+                              )}
+                              {transaction.isExecuted && (
+                                <DropdownMenuItem onClick={() => reverseExecution(transaction.id)}>
+                                  Undo Execution
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem 
+                                onClick={() => handleEdit(transaction)}
+                                disabled={transaction.isExecuted}
+                                className={transaction.isExecuted ? "text-muted-foreground opacity-50" : ""}
+                              >
+                                Edit
+                                {transaction.isExecuted && (
+                                  <span className="ml-2 text-xs">(Undo first)</span>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteTransaction(transaction.id)}
+                                className="text-destructive"
+                              >
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </motion.div>
                   )
@@ -466,13 +1065,13 @@ export default function TransactionsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="amount">Amount</Label>
+                  <Label htmlFor="amount">Amount (Rs.)</Label>
                   <Input
                     id="amount"
                     type="number"
                     step="0.01"
                     value={newTransaction.amount}
-                    onChange={(e) => setNewTransaction({...newTransaction, amount: parseFloat(e.target.value) || 0})}
+                    onChange={(e) => setNewTransaction({...newTransaction, amount: e.target.value})}
                     placeholder="0.00"
                   />
                 </div>
@@ -487,6 +1086,7 @@ export default function TransactionsPage() {
                       <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="LKR">LKR (Rs.)</SelectItem>
                       <SelectItem value="USD">USD</SelectItem>
                       <SelectItem value="EUR">EUR</SelectItem>
                       <SelectItem value="GBP">GBP</SelectItem>
@@ -537,6 +1137,48 @@ export default function TransactionsPage() {
                 </>
               )}
 
+              {transactionType === "INCOME" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="to-account">Deposit To Account</Label>
+                  <Select
+                    value={newTransaction.toAccount}
+                    onValueChange={(value) => setNewTransaction({...newTransaction, toAccount: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select account to deposit income" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map(account => (
+                        <SelectItem key={account.id} value={account.name}>
+                          {account.name} (${account.balance.toFixed(2)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {transactionType === "EXPENSE" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="from-account">Pay From Account</Label>
+                  <Select
+                    value={newTransaction.fromAccount}
+                    onValueChange={(value) => setNewTransaction({...newTransaction, fromAccount: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select account to pay from" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map(account => (
+                        <SelectItem key={account.id} value={account.name}>
+                          {account.name} (${account.balance.toFixed(2)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="grid gap-2">
                 <Label>Scheduled Date</Label>
                 <Popover>
@@ -584,9 +1226,182 @@ export default function TransactionsPage() {
               </Button>
               <Button 
                 onClick={handleAddTransaction} 
-                disabled={!newTransaction.description || newTransaction.amount <= 0}
+                disabled={
+                  !newTransaction.description || 
+                  !newTransaction.amount || 
+                  parseFloat(newTransaction.amount) <= 0 ||
+                  (transactionType === "TRANSFER" && (!newTransaction.fromAccount || !newTransaction.toAccount)) ||
+                  (transactionType === "INCOME" && !newTransaction.toAccount) ||
+                  (transactionType === "EXPENSE" && !newTransaction.fromAccount)
+                }
               >
                 Schedule Transaction
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Transaction Dialog */}
+        <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Scheduled Transaction</DialogTitle>
+            </DialogHeader>
+            {selectedTransaction && (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Input
+                    id="description"
+                    value={selectedTransaction.description}
+                    onChange={(e) => setSelectedTransaction({...selectedTransaction, description: e.target.value})}
+                    placeholder="Transaction description"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="amount">Amount</Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    value={selectedTransaction.amount}
+                    onChange={(e) => setSelectedTransaction({...selectedTransaction, amount: parseFloat(e.target.value) || 0})}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="currency">Currency</Label>
+                  <Select 
+                    value={selectedTransaction.currency} 
+                    onValueChange={(value) => setSelectedTransaction({...selectedTransaction, currency: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LKR">LKR - Sri Lankan Rupee</SelectItem>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="frequency">Frequency</Label>
+                  <Select 
+                    value={selectedTransaction.frequency} 
+                    onValueChange={(value) => setSelectedTransaction({...selectedTransaction, frequency: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="once">Once</SelectItem>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="yearly">Yearly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`/api/scheduled-transactions/${selectedTransaction.id}`, {
+                          method: 'PUT',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'x-user-id': 'user-1'
+                          },
+                          body: JSON.stringify({
+                            description: selectedTransaction.description,
+                            amount: selectedTransaction.amount,
+                            currency: selectedTransaction.currency,
+                            frequency: selectedTransaction.frequency,
+                            scheduledDate: selectedTransaction.scheduledDate
+                          }),
+                        })
+
+                        if (response.ok) {
+                          handleEditSuccess()
+                          toast({
+                            title: "Success",
+                            description: "Transaction updated successfully",
+                          })
+                        } else {
+                          const data = await response.json()
+                          toast({
+                            title: "Error",
+                            description: data.error || "Failed to update transaction",
+                            variant: "destructive",
+                          })
+                        }
+                      } catch (error) {
+                        console.error('Error updating transaction:', error)
+                        toast({
+                          title: "Error",
+                          description: "Failed to update transaction",
+                          variant: "destructive",
+                        })
+                      }
+                    }}
+                    className="flex-1"
+                  >
+                    Update Transaction
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowEditForm(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Selected Confirmation Dialog */}
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Selected Transactions</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-muted-foreground">
+                Are you sure you want to delete {selectedTransactions.length} selected transaction{selectedTransactions.length > 1 ? 's' : ''}? 
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteSelected}>
+                Delete {selectedTransactions.length} Transaction{selectedTransactions.length > 1 ? 's' : ''}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Clear All Confirmation Dialog */}
+        <Dialog open={showClearAllDialog} onOpenChange={setShowClearAllDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Clear All Transactions</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-muted-foreground">
+                Are you sure you want to delete all {transactions.length} transactions? 
+                This action cannot be undone and will permanently remove all transaction data.
+              </p>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowClearAllDialog(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleClearAll}>
+                Clear All Transactions
               </Button>
             </div>
           </DialogContent>
